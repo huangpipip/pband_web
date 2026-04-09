@@ -1,6 +1,7 @@
 (function () {
   const state = {
     data: null,
+    plotUiRevision: 0,
   };
 
   const MATPLOTLIB_HIGH_CONTRAST_PALETTE = [
@@ -27,11 +28,75 @@
     dxz: "#e377c2",
     "x2-y2": "#bcbd22",
     "dx2-y2": "#bcbd22",
+    "fy(3x2-y2)": "#4c78a8",
+    fxyz: "#f58518",
+    fyz2: "#54a24b",
+    fz3: "#e45756",
+    fxz2: "#72b7b2",
+    "fz(x2-y2)": "#b279a2",
+    "fx(x2-3y2)": "#ff9da6",
     f: "#7f7f7f",
     p: "#ff7f0e",
     d: "#9467bd",
     tot: "#111111",
     other: "#17becf",
+  };
+  const ORBITAL_CANONICAL_BY_FINGERPRINT = {
+    tot: "tot",
+    total: "tot",
+    s: "s",
+    px: "px",
+    py: "py",
+    pz: "pz",
+    dxy: "dxy",
+    xy: "dxy",
+    dyz: "dyz",
+    yz: "dyz",
+    dz2: "dz2",
+    z2: "dz2",
+    dxz: "dxz",
+    xz: "dxz",
+    dx2y2: "dx2-y2",
+    x2y2: "dx2-y2",
+    fy3x2y2: "fy(3x2-y2)",
+    y3x2y2: "fy(3x2-y2)",
+    fxyz: "fxyz",
+    xyz: "fxyz",
+    fyz2: "fyz2",
+    yz2: "fyz2",
+    fz3: "fz3",
+    z3: "fz3",
+    fxz2: "fxz2",
+    xz2: "fxz2",
+    fzx2y2: "fz(x2-y2)",
+    zx2y2: "fz(x2-y2)",
+    fxx23y2: "fx(x2-3y2)",
+    xx23y2: "fx(x2-3y2)",
+    p: "p",
+    d: "d",
+    f: "f",
+  };
+  const ORBITAL_FAMILY_BY_CANONICAL = {
+    tot: "tot",
+    s: "s",
+    px: "p",
+    py: "p",
+    pz: "p",
+    p: "p",
+    dxy: "d",
+    dyz: "d",
+    dz2: "d",
+    dxz: "d",
+    "dx2-y2": "d",
+    d: "d",
+    "fy(3x2-y2)": "f",
+    fxyz: "f",
+    fyz2: "f",
+    fz3: "f",
+    fxz2: "f",
+    "fz(x2-y2)": "f",
+    "fx(x2-3y2)": "f",
+    f: "f",
   };
 
   const elements = {
@@ -45,6 +110,8 @@
     alignFermi: document.getElementById("align-fermi"),
     markerScale: document.getElementById("marker-scale"),
     markerScaleValue: document.getElementById("marker-scale-value"),
+    markerOpacity: document.getElementById("marker-opacity"),
+    markerOpacityValue: document.getElementById("marker-opacity-value"),
     markerOutline: document.getElementById("marker-outline"),
     plotTheme: document.getElementById("plot-theme"),
     spinChannel: document.getElementById("spin-channel"),
@@ -65,6 +132,10 @@
     elements.statusLine.classList.toggle("error", Boolean(isError));
   }
 
+  function invalidatePlotView() {
+    state.plotUiRevision += 1;
+  }
+
   function nextFrame() {
     return new Promise((resolve) => requestAnimationFrame(() => resolve()));
   }
@@ -77,6 +148,7 @@
     await nextFrame();
     const data = window.VasprunParser.parse(xmlText);
     state.data = data;
+    invalidatePlotView();
     populateControls(data);
     updateSummary(data);
     renderPlot();
@@ -131,7 +203,9 @@
     elements.alignFermi.checked = true;
     elements.markerScale.value = "18";
     elements.markerScaleValue.textContent = "18";
-    elements.markerOutline.checked = true;
+    elements.markerOpacity.value = "80";
+    elements.markerOpacityValue.textContent = "80%";
+    elements.markerOutline.checked = false;
     elements.plotTheme.value = "sandstone";
     elements.atomSelection.value = "";
     elements.orbitalMode.value = "components";
@@ -214,27 +288,41 @@
   }
 
   function orbitalFamily(name) {
-    const lower = String(name || "").toLowerCase();
-    if (lower === "tot") {
-      return "tot";
+    const canonical = canonicalOrbitalName(name);
+    if (ORBITAL_FAMILY_BY_CANONICAL[canonical]) {
+      return ORBITAL_FAMILY_BY_CANONICAL[canonical];
     }
-    if (lower === "s" || lower.startsWith("s")) {
+    if (canonical.startsWith("s")) {
       return "s";
     }
-    if (lower.startsWith("p")) {
+    if (canonical.startsWith("p")) {
       return "p";
     }
-    if (lower.startsWith("d") || ["x2-y2", "dx2-y2", "dz2"].includes(lower)) {
+    if (canonical.startsWith("d")) {
       return "d";
     }
-    if (lower.startsWith("f")) {
+    if (canonical.startsWith("f")) {
       return "f";
     }
     return "other";
   }
 
+  function orbitalFingerprint(name) {
+    return String(name || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+  }
+
+  function canonicalOrbitalName(name) {
+    const fingerprint = orbitalFingerprint(name);
+    if (!fingerprint) {
+      return "";
+    }
+    return ORBITAL_CANONICAL_BY_FINGERPRINT[fingerprint] || fingerprint;
+  }
+
   function orbitalSortKey(name) {
-    const lower = String(name || "").toLowerCase();
+    const canonical = canonicalOrbitalName(name);
     const familyOrder = {
       s: 0,
       p: 1,
@@ -256,10 +344,18 @@
       "x2-y2": 4,
       "dx2-y2": 4,
       d: 5,
+      "fy(3x2-y2)": 0,
+      fxyz: 1,
+      fyz2: 2,
+      fz3: 3,
+      fxz2: 4,
+      "fz(x2-y2)": 5,
+      "fx(x2-3y2)": 6,
+      f: 7,
       tot: 99,
     };
-    const family = orbitalFamily(lower);
-    return [familyOrder[family] ?? 98, componentOrder[lower] ?? 50, lower];
+    const family = orbitalFamily(canonical);
+    return [familyOrder[family] ?? 98, componentOrder[canonical] ?? 50, canonical];
   }
 
   function orderedOrbitals(data) {
@@ -317,13 +413,12 @@
     }
 
     elements.orbitalFilters.classList.remove("empty-state");
-    const hasResolvedChannels = entries.some((entry) => entry.family !== "tot");
     entries.forEach((entry) => {
       const label = document.createElement("label");
       label.className = "pill";
       const input = document.createElement("input");
       input.type = "checkbox";
-      input.checked = hasResolvedChannels ? entry.family !== "tot" : true;
+      input.checked = false;
       input.dataset.selectionLabel = entry.label;
       input.dataset.selectionIndices = entry.indices.join(",");
       input.dataset.selectionFamily = entry.family;
@@ -429,6 +524,7 @@
       energyMax: Number(elements.energyMax.value),
       alignToFermi: elements.alignFermi.checked,
       markerScale: Number(elements.markerScale.value),
+      markerOpacity: Number(elements.markerOpacity.value) / 100,
       markerOutline: elements.markerOutline.checked,
       plotTheme: elements.plotTheme.value,
       selectedElements,
@@ -529,7 +625,7 @@
   }
 
   function colorForOrbital(label, index) {
-    const normalized = String(label || "").toLowerCase();
+    const normalized = canonicalOrbitalName(label);
     return (
       MATPLOTLIB_ORBITAL_SEQUENCE[normalized] ||
       MATPLOTLIB_HIGH_CONTRAST_PALETTE[index % MATPLOTLIB_HIGH_CONTRAST_PALETTE.length]
@@ -633,7 +729,7 @@
       name: traceLabel,
       marker: {
         size: sizes,
-        opacity: 0.72,
+        opacity: selection.markerOpacity,
         line: {
           width: selection.markerOutline ? 0.6 : 0,
           color: "rgba(255,255,255,0.55)",
@@ -809,9 +905,16 @@
       data.mode === "soc" ? "Projected band structure with SOC" : "Projected band structure";
 
     const layout = {
+      uirevision: `plot-${state.plotUiRevision}`,
       paper_bgcolor: "rgba(0,0,0,0)",
       plot_bgcolor: theme.plotBg,
-      margin: { l: 70, r: 30, t: 20, b: 58 },
+      margin: {
+        l: 70,
+        r: 30,
+        t: 72,
+        b: 58,
+        autoexpand: false,
+      },
       font: {
         color: theme.font,
       },
@@ -853,7 +956,10 @@
       },
       legend: {
         orientation: "h",
-        y: 1.05,
+        x: 0,
+        xanchor: "left",
+        y: 1.02,
+        yanchor: "bottom",
         bgcolor: theme.legendBg,
         bordercolor: theme.legendBorder,
         borderwidth: 1,
@@ -873,6 +979,7 @@
     if (!state.data) {
       return;
     }
+    invalidatePlotView();
     populateControls(state.data);
     renderPlot();
   }
@@ -906,10 +1013,14 @@
       });
     });
 
+    [elements.energyMin, elements.energyMax, elements.alignFermi].forEach((input) =>
+      input.addEventListener("input", () => {
+        invalidatePlotView();
+        renderPlot();
+      }),
+    );
+
     [
-      elements.energyMin,
-      elements.energyMax,
-      elements.alignFermi,
       elements.markerOutline,
       elements.plotTheme,
       elements.spinChannel,
@@ -927,6 +1038,11 @@
 
     elements.markerScale.addEventListener("input", () => {
       elements.markerScaleValue.textContent = elements.markerScale.value;
+      renderPlot();
+    });
+
+    elements.markerOpacity.addEventListener("input", () => {
+      elements.markerOpacityValue.textContent = `${elements.markerOpacity.value}%`;
       renderPlot();
     });
   }

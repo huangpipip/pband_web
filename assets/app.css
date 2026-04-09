@@ -289,14 +289,23 @@ dd {
   justify-content: space-between;
   gap: 12px;
   align-items: end;
+  min-height: 88px;
   padding: 20px 22px 0;
   border-bottom: 1px solid rgba(58, 43, 27, 0.12);
 }
 
+.plot-toolbar > div {
+  min-width: 0;
+}
+
 .selection-summary {
+  flex: 0 1 38ch;
   max-width: 38ch;
   text-align: right;
   font-size: 0.92rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .plot-surface {
@@ -329,10 +338,14 @@ dd {
   .plot-toolbar {
     flex-direction: column;
     align-items: start;
+    min-height: 0;
   }
 
   .selection-summary {
+    flex: none;
     text-align: left;
+    white-space: normal;
+    overflow: visible;
   }
 }
 

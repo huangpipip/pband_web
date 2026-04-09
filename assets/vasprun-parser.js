@@ -1,5 +1,62 @@
 (function () {
   const EPSILON = 1e-8;
+  const ORBITAL_CANONICAL_BY_FINGERPRINT = {
+    tot: "tot",
+    total: "tot",
+    s: "s",
+    px: "px",
+    py: "py",
+    pz: "pz",
+    dxy: "dxy",
+    xy: "dxy",
+    dyz: "dyz",
+    yz: "dyz",
+    dz2: "dz2",
+    z2: "dz2",
+    dxz: "dxz",
+    xz: "dxz",
+    dx2y2: "dx2-y2",
+    x2y2: "dx2-y2",
+    fy3x2y2: "fy(3x2-y2)",
+    y3x2y2: "fy(3x2-y2)",
+    fxyz: "fxyz",
+    xyz: "fxyz",
+    fyz2: "fyz2",
+    yz2: "fyz2",
+    fz3: "fz3",
+    z3: "fz3",
+    fxz2: "fxz2",
+    xz2: "fxz2",
+    fzx2y2: "fz(x2-y2)",
+    zx2y2: "fz(x2-y2)",
+    fxx23y2: "fx(x2-3y2)",
+    xx23y2: "fx(x2-3y2)",
+    p: "p",
+    d: "d",
+    f: "f",
+  };
+  const ORBITAL_FAMILY_BY_CANONICAL = {
+    tot: "tot",
+    s: "s",
+    px: "p",
+    py: "p",
+    pz: "p",
+    p: "p",
+    dxy: "d",
+    dyz: "d",
+    dz2: "d",
+    dxz: "d",
+    "dx2-y2": "d",
+    d: "d",
+    "fy(3x2-y2)": "f",
+    fxyz: "f",
+    fyz2: "f",
+    fz3: "f",
+    fxz2: "f",
+    "fz(x2-y2)": "f",
+    "fx(x2-3y2)": "f",
+    f: "f",
+  };
 
   function getText(node) {
     return node && typeof node.textContent === "string"
@@ -32,6 +89,20 @@
   function parseSpinIndex(comment) {
     const match = /spin\s*(\d+)/i.exec(comment || "");
     return match ? Number(match[1]) : 1;
+  }
+
+  function orbitalFingerprint(name) {
+    return String(name || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+  }
+
+  function canonicalOrbitalName(name) {
+    const fingerprint = orbitalFingerprint(name);
+    if (!fingerprint) {
+      return "";
+    }
+    return ORBITAL_CANONICAL_BY_FINGERPRINT[fingerprint] || fingerprint;
   }
 
   function parseAtomInfo(doc) {
@@ -306,23 +377,20 @@
   }
 
   function classifyOrbital(name) {
-    const lower = String(name || "").toLowerCase();
-    if (lower === "tot") {
-      return "tot";
+    const canonical = canonicalOrbitalName(name);
+    if (ORBITAL_FAMILY_BY_CANONICAL[canonical]) {
+      return ORBITAL_FAMILY_BY_CANONICAL[canonical];
     }
-    if (lower === "s" || lower.startsWith("s")) {
+    if (canonical.startsWith("s")) {
       return "s";
     }
-    if (lower.startsWith("p") || ["px", "py", "pz"].includes(lower)) {
+    if (canonical.startsWith("p")) {
       return "p";
     }
-    if (
-      lower.startsWith("d") ||
-      ["x2-y2", "dx2-y2", "dz2", "dxy", "dyz", "dxz"].includes(lower)
-    ) {
+    if (canonical.startsWith("d")) {
       return "d";
     }
-    if (lower.startsWith("f")) {
+    if (canonical.startsWith("f")) {
       return "f";
     }
     return "other";

@@ -80,8 +80,12 @@
             <span class="field-label">Projection marker scale</span>
             <input id="marker-scale" type="range" min="8" max="36" value="18" />
           </label>
+          <label>
+            <span class="field-label">Projection marker opacity</span>
+            <input id="marker-opacity" type="range" min="10" max="100" step="1" value="80" />
+          </label>
           <label class="checkbox-row">
-            <input id="marker-outline" type="checkbox" checked />
+            <input id="marker-outline" type="checkbox" />
             <span>White marker outline</span>
           </label>
           <label>
@@ -97,6 +101,11 @@
             <span>Compact</span>
             <span id="marker-scale-value">18</span>
             <span>Bold</span>
+          </div>
+          <div class="range-readout">
+            <span>Faint</span>
+            <span id="marker-opacity-value">80%</span>
+            <span>Solid</span>
           </div>
         </section>
 

@@ -12,6 +12,9 @@
   --danger: #b42318;
   --shadow: 0 18px 50px rgba(76, 48, 19, 0.12);
   --radius: 22px;
+  --plot-frame: rgba(58, 43, 27, 0.24);
+  --plot-surface: #f8f1e4;
+  --plot-surface-strong: #fdf7ed;
 }
 
 * {
@@ -260,6 +263,12 @@ dd {
 
 .plot-card {
   overflow: hidden;
+  border-color: var(--plot-frame);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 249, 0.96) 0%, rgba(247, 238, 224, 0.96) 100%);
+  box-shadow:
+    0 22px 54px rgba(76, 48, 19, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .plot-toolbar {
@@ -268,6 +277,7 @@ dd {
   gap: 12px;
   align-items: end;
   padding: 20px 22px 0;
+  border-bottom: 1px solid rgba(58, 43, 27, 0.12);
 }
 
 .selection-summary {
@@ -278,6 +288,9 @@ dd {
 
 .plot-surface {
   min-height: calc(100vh - 88px);
+  padding: 10px 12px 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 252, 246, 0.86) 0%, rgba(245, 236, 221, 0.78) 100%);
 }
 
 @media (max-width: 1080px) {

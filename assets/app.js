@@ -725,23 +725,53 @@
 
     const layout = {
       paper_bgcolor: "rgba(0,0,0,0)",
-      plot_bgcolor: "rgba(255,251,245,0.55)",
+      plot_bgcolor: "#f8f1e4",
       margin: { l: 70, r: 30, t: 20, b: 58 },
+      font: {
+        color: "#221c15",
+      },
       xaxis: {
         title: "k-path distance",
         zeroline: false,
         showgrid: false,
+        showline: true,
+        linecolor: "rgba(34,28,21,0.42)",
+        linewidth: 1.3,
+        ticks: "outside",
+        tickcolor: "rgba(34,28,21,0.36)",
+        tickfont: {
+          color: "#342b21",
+        },
+        titlefont: {
+          color: "#221c15",
+        },
       },
       yaxis: {
         title: selection.alignToFermi ? "Energy - E_F (eV)" : "Energy (eV)",
         range: [energyMin, energyMax],
         zeroline: true,
-        zerolinecolor: "rgba(31,27,22,0.18)",
-        gridcolor: "rgba(31,27,22,0.08)",
+        zerolinecolor: "rgba(34,28,21,0.34)",
+        zerolinewidth: 1.3,
+        gridcolor: "rgba(34,28,21,0.14)",
+        gridwidth: 1,
+        showline: true,
+        linecolor: "rgba(34,28,21,0.42)",
+        linewidth: 1.3,
+        ticks: "outside",
+        tickcolor: "rgba(34,28,21,0.36)",
+        tickfont: {
+          color: "#342b21",
+        },
+        titlefont: {
+          color: "#221c15",
+        },
       },
       legend: {
         orientation: "h",
         y: 1.05,
+        bgcolor: "rgba(255, 251, 244, 0.88)",
+        bordercolor: "rgba(58,43,27,0.18)",
+        borderwidth: 1,
       },
       shapes: boundaryShapes(data, energyMin, energyMax),
       hovermode: "closest",

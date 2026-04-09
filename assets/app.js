@@ -3,26 +3,36 @@
     data: null,
   };
 
-  const colors = {
-    total: "#b3472f",
-    up: "#b3472f",
-    down: "#215f7d",
-    socLine: "#704214",
-  };
-  const orbitalPalette = [
-    "#b3472f",
-    "#215f7d",
-    "#ab7a19",
-    "#2f6b4f",
-    "#8f4aa1",
-    "#c15c17",
-    "#4b63c1",
-    "#7b8f22",
-    "#8a3b69",
-    "#2d8b8b",
-    "#7f4f24",
-    "#b03a7a",
+  const MATPLOTLIB_HIGH_CONTRAST_PALETTE = [
+    "#1f77b4",
+    "#ff7f0e",
+    "#2ca02c",
+    "#d62728",
+    "#9467bd",
+    "#8c564b",
+    "#e377c2",
+    "#17becf",
+    "#bcbd22",
+    "#7f7f7f",
   ];
+
+  const MATPLOTLIB_ORBITAL_SEQUENCE = {
+    s: "#1f77b4",
+    px: "#d62728",
+    py: "#2ca02c",
+    pz: "#ff7f0e",
+    dxy: "#9467bd",
+    dyz: "#17becf",
+    dz2: "#8c564b",
+    dxz: "#e377c2",
+    "x2-y2": "#bcbd22",
+    "dx2-y2": "#bcbd22",
+    f: "#7f7f7f",
+    p: "#ff7f0e",
+    d: "#9467bd",
+    tot: "#111111",
+    other: "#17becf",
+  };
 
   const elements = {
     fileInput: document.getElementById("file-input"),
@@ -35,6 +45,8 @@
     alignFermi: document.getElementById("align-fermi"),
     markerScale: document.getElementById("marker-scale"),
     markerScaleValue: document.getElementById("marker-scale-value"),
+    markerOutline: document.getElementById("marker-outline"),
+    plotTheme: document.getElementById("plot-theme"),
     spinChannel: document.getElementById("spin-channel"),
     socComponent: document.getElementById("soc-component"),
     spinWrap: document.getElementById("spin-channel-wrap"),
@@ -119,6 +131,8 @@
     elements.alignFermi.checked = true;
     elements.markerScale.value = "18";
     elements.markerScaleValue.textContent = "18";
+    elements.markerOutline.checked = true;
+    elements.plotTheme.value = "sandstone";
     elements.atomSelection.value = "";
     elements.orbitalMode.value = "components";
 
@@ -415,6 +429,8 @@
       energyMax: Number(elements.energyMax.value),
       alignToFermi: elements.alignFermi.checked,
       markerScale: Number(elements.markerScale.value),
+      markerOutline: elements.markerOutline.checked,
+      plotTheme: elements.plotTheme.value,
       selectedElements,
     };
   }
@@ -457,17 +473,17 @@
     return `${modeLabel(data.mode)} • ${atomLabel} • ${selection.orbitalMode} • ${orbitalLabel} • ${mode}`;
   }
 
-  function buildChannelDescriptors(data, selection) {
+  function buildChannelDescriptors(data, selection, theme) {
     if (data.mode === "collinear_spin") {
       if (selection.spinChannel === "up") {
-        return [{ key: "up", label: "Spin up", color: colors.up }];
+        return [{ key: "up", label: "Spin up", color: theme.bandColors.up }];
       }
       if (selection.spinChannel === "down") {
-        return [{ key: "down", label: "Spin down", color: colors.down }];
+        return [{ key: "down", label: "Spin down", color: theme.bandColors.down }];
       }
       return [
-        { key: "up", label: "Spin up", color: colors.up },
-        { key: "down", label: "Spin down", color: colors.down },
+        { key: "up", label: "Spin up", color: theme.bandColors.up },
+        { key: "down", label: "Spin down", color: theme.bandColors.down },
       ];
     }
 
@@ -479,12 +495,12 @@
             selection.socComponent === "total"
               ? "SOC total"
               : `SOC ${selection.socComponent}`,
-          color: colors.socLine,
+          color: theme.bandColors.socLine,
         },
       ];
     }
 
-    return [{ key: "total", label: "Bands", color: colors.total }];
+    return [{ key: "total", label: "Bands", color: theme.bandColors.total }];
   }
 
   function aggregateWeights(projectionMatrix, atomIndices, orbitalIndices) {
@@ -514,20 +530,10 @@
 
   function colorForOrbital(label, index) {
     const normalized = String(label || "").toLowerCase();
-    const explicitMap = {
-      s: "#c05a2b",
-      py: "#215f7d",
-      pz: "#2f6b4f",
-      px: "#7a56c5",
-      dxy: "#ab7a19",
-      dyz: "#cc5c39",
-      dz2: "#3b7bb5",
-      dxz: "#8f4aa1",
-      "x2-y2": "#8a3b69",
-      "dx2-y2": "#8a3b69",
-      tot: "#4c3d28",
-    };
-    return explicitMap[normalized] || orbitalPalette[index % orbitalPalette.length];
+    return (
+      MATPLOTLIB_ORBITAL_SEQUENCE[normalized] ||
+      MATPLOTLIB_HIGH_CONTRAST_PALETTE[index % MATPLOTLIB_HIGH_CONTRAST_PALETTE.length]
+    );
   }
 
   function colorForSelection(selectionItem, index) {
@@ -629,7 +635,7 @@
         size: sizes,
         opacity: 0.72,
         line: {
-          width: 0.6,
+          width: selection.markerOutline ? 0.6 : 0,
           color: "rgba(255,255,255,0.55)",
         },
       },
@@ -646,7 +652,7 @@
     return trace;
   }
 
-  function boundaryShapes(data, energyMin, energyMax) {
+  function boundaryShapes(data, energyMin, energyMax, theme) {
     return data.boundaryPositions.map((position) => ({
       type: "line",
       x0: position,
@@ -654,11 +660,89 @@
       y0: energyMin,
       y1: energyMax,
       line: {
-        color: "rgba(31,27,22,0.12)",
+        color: theme.boundary,
         width: 1,
         dash: "dot",
       },
     }));
+  }
+
+  function visualTheme(themeKey) {
+    const themes = {
+      sandstone: {
+        plotBg: "#f8f1e4",
+        font: "#221c15",
+        tick: "#342b21",
+        axis: "rgba(34,28,21,0.42)",
+        tickLine: "rgba(34,28,21,0.36)",
+        zero: "rgba(34,28,21,0.34)",
+        grid: "rgba(34,28,21,0.14)",
+        legendBg: "rgba(255, 251, 244, 0.88)",
+        legendBorder: "rgba(58,43,27,0.18)",
+        boundary: "rgba(34,28,21,0.18)",
+        bandColors: {
+          total: "#8f3625",
+          up: "#b3472f",
+          down: "#215f7d",
+          socLine: "#704214",
+        },
+      },
+      studio: {
+        plotBg: "#fffdfb",
+        font: "#191616",
+        tick: "#302828",
+        axis: "rgba(25,22,22,0.42)",
+        tickLine: "rgba(25,22,22,0.34)",
+        zero: "rgba(25,22,22,0.28)",
+        grid: "rgba(25,22,22,0.1)",
+        legendBg: "rgba(255,255,255,0.92)",
+        legendBorder: "rgba(25,22,22,0.14)",
+        boundary: "rgba(25,22,22,0.15)",
+        bandColors: {
+          total: "#202020",
+          up: "#2d2d2d",
+          down: "#7b2f2f",
+          socLine: "#4a4a4a",
+        },
+      },
+      harbor: {
+        plotBg: "#e7eef5",
+        font: "#142536",
+        tick: "#22384d",
+        axis: "rgba(20,37,54,0.42)",
+        tickLine: "rgba(20,37,54,0.34)",
+        zero: "rgba(20,37,54,0.28)",
+        grid: "rgba(20,37,54,0.12)",
+        legendBg: "rgba(241,246,251,0.9)",
+        legendBorder: "rgba(20,37,54,0.16)",
+        boundary: "rgba(20,37,54,0.17)",
+        bandColors: {
+          total: "#174f78",
+          up: "#1f5f8b",
+          down: "#7a3d55",
+          socLine: "#2f4f68",
+        },
+      },
+      moss: {
+        plotBg: "#edf2e8",
+        font: "#1d2b1f",
+        tick: "#304235",
+        axis: "rgba(29,43,31,0.42)",
+        tickLine: "rgba(29,43,31,0.34)",
+        zero: "rgba(29,43,31,0.28)",
+        grid: "rgba(29,43,31,0.12)",
+        legendBg: "rgba(244,248,240,0.9)",
+        legendBorder: "rgba(29,43,31,0.16)",
+        boundary: "rgba(29,43,31,0.17)",
+        bandColors: {
+          total: "#355c3a",
+          up: "#406d45",
+          down: "#7a4f2d",
+          socLine: "#4b5e3a",
+        },
+      },
+    };
+    return themes[themeKey] || themes.sandstone;
   }
 
   function renderPlot() {
@@ -668,13 +752,14 @@
 
     const data = state.data;
     const selection = currentSelection(data);
+    const theme = visualTheme(selection.plotTheme);
     let energyMin = selection.energyMin;
     let energyMax = selection.energyMax;
     if (!(energyMin < energyMax)) {
       energyMin = energyMax - 0.5;
     }
     const energyShift = selection.alignToFermi ? data.fermiEnergy : 0;
-    const descriptors = buildChannelDescriptors(data, selection);
+    const descriptors = buildChannelDescriptors(data, selection, theme);
     const traces = [];
 
     descriptors.forEach((descriptor) => {
@@ -725,55 +810,55 @@
 
     const layout = {
       paper_bgcolor: "rgba(0,0,0,0)",
-      plot_bgcolor: "#f8f1e4",
+      plot_bgcolor: theme.plotBg,
       margin: { l: 70, r: 30, t: 20, b: 58 },
       font: {
-        color: "#221c15",
+        color: theme.font,
       },
       xaxis: {
         title: "k-path distance",
         zeroline: false,
         showgrid: false,
         showline: true,
-        linecolor: "rgba(34,28,21,0.42)",
+        linecolor: theme.axis,
         linewidth: 1.3,
         ticks: "outside",
-        tickcolor: "rgba(34,28,21,0.36)",
+        tickcolor: theme.tickLine,
         tickfont: {
-          color: "#342b21",
+          color: theme.tick,
         },
         titlefont: {
-          color: "#221c15",
+          color: theme.font,
         },
       },
       yaxis: {
         title: selection.alignToFermi ? "Energy - E_F (eV)" : "Energy (eV)",
         range: [energyMin, energyMax],
         zeroline: true,
-        zerolinecolor: "rgba(34,28,21,0.34)",
+        zerolinecolor: theme.zero,
         zerolinewidth: 1.3,
-        gridcolor: "rgba(34,28,21,0.14)",
+        gridcolor: theme.grid,
         gridwidth: 1,
         showline: true,
-        linecolor: "rgba(34,28,21,0.42)",
+        linecolor: theme.axis,
         linewidth: 1.3,
         ticks: "outside",
-        tickcolor: "rgba(34,28,21,0.36)",
+        tickcolor: theme.tickLine,
         tickfont: {
-          color: "#342b21",
+          color: theme.tick,
         },
         titlefont: {
-          color: "#221c15",
+          color: theme.font,
         },
       },
       legend: {
         orientation: "h",
         y: 1.05,
-        bgcolor: "rgba(255, 251, 244, 0.88)",
-        bordercolor: "rgba(58,43,27,0.18)",
+        bgcolor: theme.legendBg,
+        bordercolor: theme.legendBorder,
         borderwidth: 1,
       },
-      shapes: boundaryShapes(data, energyMin, energyMax),
+      shapes: boundaryShapes(data, energyMin, energyMax, theme),
       hovermode: "closest",
     };
 
@@ -825,6 +910,8 @@
       elements.energyMin,
       elements.energyMax,
       elements.alignFermi,
+      elements.markerOutline,
+      elements.plotTheme,
       elements.spinChannel,
       elements.socComponent,
       elements.atomSelection,

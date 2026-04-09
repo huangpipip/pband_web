@@ -116,6 +116,18 @@
     return a.every((value, index) => Math.abs(value - b[index]) < EPSILON);
   }
 
+  function median(values) {
+    if (!values.length) {
+      return 0;
+    }
+    const sorted = [...values].sort((left, right) => left - right);
+    const middle = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 0) {
+      return (sorted[middle - 1] + sorted[middle]) / 2;
+    }
+    return sorted[middle];
+  }
+
   function parseKpoints(doc, basis) {
     const kpointNode = doc.querySelector('kpoints > varray[name="kpointlist"]');
     if (!kpointNode) {
@@ -124,6 +136,19 @@
 
     const kpoints = toChildren(kpointNode, "v").map(parseNumericRow);
     const reciprocal = basis ? reciprocalBasis(basis) : null;
+    const stepNorms = [];
+
+    for (let index = 1; index < kpoints.length; index += 1) {
+      const delta = kpoints[index].map((value, axis) => value - kpoints[index - 1][axis]);
+      const cartesianDelta = reciprocal ? multiplyFractionalVector(delta, reciprocal) : delta;
+      const length = norm(cartesianDelta);
+      stepNorms.push(length);
+    }
+
+    const positiveSteps = stepNorms.filter((value) => value > EPSILON);
+    const typicalStep = median(positiveSteps);
+    const jumpThreshold = typicalStep > EPSILON ? typicalStep * 3 : Number.POSITIVE_INFINITY;
+    const jumpGap = typicalStep > EPSILON ? typicalStep * 0.35 : 0;
     const distances = [];
     const segments = [];
     let start = 0;
@@ -134,7 +159,7 @@
         continue;
       }
 
-      const delta = kpoints[index].map((value, axis) => value - kpoints[index - 1][axis]);
+      const stepNorm = stepNorms[index - 1];
       if (samePoint(kpoints[index], kpoints[index - 1])) {
         segments.push({ start, end: index - 1 });
         start = index;
@@ -142,8 +167,14 @@
         continue;
       }
 
-      const cartesianDelta = reciprocal ? multiplyFractionalVector(delta, reciprocal) : delta;
-      distances.push(distances[index - 1] + norm(cartesianDelta));
+      if (stepNorm > jumpThreshold) {
+        segments.push({ start, end: index - 1 });
+        start = index;
+        distances.push(distances[index - 1] + jumpGap);
+        continue;
+      }
+
+      distances.push(distances[index - 1] + stepNorm);
     }
 
     if (kpoints.length > 0) {
@@ -217,9 +248,25 @@
       };
     }
 
-    const arrayNode = node.querySelector("array");
+    const arrayNode = toChildren(node, "array")[0];
+    if (!arrayNode) {
+      return {
+        orbitalNames: [],
+        orbitalGroups: {},
+        projections: {},
+        magnetization: null,
+      };
+    }
     const fields = toChildren(arrayNode, "field").map(getText);
     const rootSet = toChildren(arrayNode, "set")[0];
+    if (!rootSet) {
+      return {
+        orbitalNames: fields,
+        orbitalGroups: buildOrbitalGroups(fields),
+        projections: {},
+        magnetization: null,
+      };
+    }
     const spinSets = toChildren(rootSet, "set");
     const rawChannels = {};
 

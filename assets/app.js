@@ -9,6 +9,20 @@
     down: "#215f7d",
     socLine: "#704214",
   };
+  const orbitalPalette = [
+    "#b3472f",
+    "#215f7d",
+    "#ab7a19",
+    "#2f6b4f",
+    "#8f4aa1",
+    "#c15c17",
+    "#4b63c1",
+    "#7b8f22",
+    "#8a3b69",
+    "#2d8b8b",
+    "#7f4f24",
+    "#b03a7a",
+  ];
 
   const elements = {
     fileInput: document.getElementById("file-input"),
@@ -27,6 +41,7 @@
     socWrap: document.getElementById("soc-component-wrap"),
     atomSelection: document.getElementById("atom-selection"),
     elementFilters: document.getElementById("element-filters"),
+    orbitalMode: document.getElementById("orbital-mode"),
     orbitalFilters: document.getElementById("orbital-filters"),
     selectionSummary: document.getElementById("selection-summary"),
     plotTitle: document.getElementById("plot-title"),
@@ -105,6 +120,7 @@
     elements.markerScale.value = "18";
     elements.markerScaleValue.textContent = "18";
     elements.atomSelection.value = "";
+    elements.orbitalMode.value = "components";
 
     populateSpinControls(data);
     populateElementFilters(data);
@@ -183,9 +199,80 @@
     });
   }
 
-  function orderedOrbitalGroups(data) {
+  function orbitalFamily(name) {
+    const lower = String(name || "").toLowerCase();
+    if (lower === "tot") {
+      return "tot";
+    }
+    if (lower === "s" || lower.startsWith("s")) {
+      return "s";
+    }
+    if (lower.startsWith("p")) {
+      return "p";
+    }
+    if (lower.startsWith("d") || ["x2-y2", "dx2-y2", "dz2"].includes(lower)) {
+      return "d";
+    }
+    if (lower.startsWith("f")) {
+      return "f";
+    }
+    return "other";
+  }
+
+  function orbitalSortKey(name) {
+    const lower = String(name || "").toLowerCase();
+    const familyOrder = {
+      s: 0,
+      p: 1,
+      d: 2,
+      f: 3,
+      other: 4,
+      tot: 5,
+    };
+    const componentOrder = {
+      s: 0,
+      py: 0,
+      pz: 1,
+      px: 2,
+      p: 3,
+      dxy: 0,
+      dyz: 1,
+      dz2: 2,
+      dxz: 3,
+      "x2-y2": 4,
+      "dx2-y2": 4,
+      d: 5,
+      tot: 99,
+    };
+    const family = orbitalFamily(lower);
+    return [familyOrder[family] ?? 98, componentOrder[lower] ?? 50, lower];
+  }
+
+  function orderedOrbitals(data) {
+    return data.orbitalNames
+      .map((name, index) => ({ index, name }))
+      .sort((left, right) => {
+        const a = orbitalSortKey(left.name);
+        const b = orbitalSortKey(right.name);
+        if (a[0] !== b[0]) {
+          return a[0] - b[0];
+        }
+        if (a[1] !== b[1]) {
+          return a[1] - b[1];
+        }
+        return String(a[2]).localeCompare(String(b[2]));
+      });
+  }
+
+  function orderedOrbitalFamilies(data) {
     const preferred = ["s", "p", "d", "f", "tot", "other"];
-    return preferred.filter((key) => Array.isArray(data.orbitalGroups[key]));
+    return preferred
+      .filter((family) => Array.isArray(data.orbitalGroups[family]) && data.orbitalGroups[family].length)
+      .map((family) => ({
+        key: family,
+        label: family,
+        indices: [...data.orbitalGroups[family]],
+      }));
   }
 
   function populateOrbitalFilters(data) {
@@ -196,25 +283,39 @@
       return;
     }
 
-    const groups = orderedOrbitalGroups(data);
-    if (!groups.length) {
+    const useFamilies = elements.orbitalMode.value === "families";
+    const entries = useFamilies
+      ? orderedOrbitalFamilies(data).map((family) => ({
+          label: family.label,
+          indices: family.indices,
+          family: family.key,
+        }))
+      : orderedOrbitals(data).map((orbital) => ({
+          label: orbital.name,
+          indices: [orbital.index],
+          family: orbitalFamily(orbital.name),
+        }));
+
+    if (!entries.length) {
       elements.orbitalFilters.textContent = "Projected data found, but orbital fields are empty.";
       elements.orbitalFilters.classList.add("empty-state");
       return;
     }
 
     elements.orbitalFilters.classList.remove("empty-state");
-    const hasResolvedChannels = groups.some((group) => ["s", "p", "d", "f"].includes(group));
-    groups.forEach((group) => {
+    const hasResolvedChannels = entries.some((entry) => entry.family !== "tot");
+    entries.forEach((entry) => {
       const label = document.createElement("label");
       label.className = "pill";
       const input = document.createElement("input");
       input.type = "checkbox";
-      input.checked = hasResolvedChannels ? group !== "tot" : true;
-      input.dataset.orbitalGroup = group;
+      input.checked = hasResolvedChannels ? entry.family !== "tot" : true;
+      input.dataset.selectionLabel = entry.label;
+      input.dataset.selectionIndices = entry.indices.join(",");
+      input.dataset.selectionFamily = entry.family;
       input.addEventListener("change", renderPlot);
       label.appendChild(input);
-      label.appendChild(document.createTextNode(group));
+      label.appendChild(document.createTextNode(entry.label));
       elements.orbitalFilters.appendChild(label);
     });
   }
@@ -282,14 +383,32 @@
       selectedAtoms.push(index);
     });
 
-    const groupKeys = checkedValues(elements.orbitalFilters, "orbitalGroup");
+    const selectedOrbitalInputs = Array.from(
+      elements.orbitalFilters.querySelectorAll("input[data-selection-indices]:checked"),
+    );
+    const orbitalSelections = selectedOrbitalInputs
+      .map((input) => ({
+        indices: String(input.dataset.selectionIndices || "")
+          .split(",")
+          .map((part) => Number(part))
+          .filter((value) => Number.isInteger(value))
+          .sort((a, b) => a - b),
+        label: input.dataset.selectionLabel || "orbital",
+        family: input.dataset.selectionFamily || "other",
+      }))
+      .filter((item) => item.indices.length > 0)
+      .sort((left, right) => left.indices[0] - right.indices[0]);
+    const orbitalLabels = orbitalSelections.map((entry) => entry.label);
     const orbitalIndices = Array.from(
-      new Set(groupKeys.flatMap((key) => data.orbitalGroups[key] || [])),
+      new Set(orbitalSelections.flatMap((entry) => entry.indices)),
     ).sort((a, b) => a - b);
 
     return {
       atomIndices: selectedAtoms,
       orbitalIndices,
+      orbitalLabels,
+      orbitalSelections,
+      orbitalMode: elements.orbitalMode.value,
       spinChannel: elements.spinChannel.value,
       socComponent: elements.socComponent.value,
       energyMin: Number(elements.energyMin.value),
@@ -297,7 +416,6 @@
       alignToFermi: elements.alignFermi.checked,
       markerScale: Number(elements.markerScale.value),
       selectedElements,
-      groupKeys,
     };
   }
 
@@ -331,11 +449,12 @@
     const atomLabel = selection.atomIndices.length
       ? `${selection.atomIndices.length} atoms`
       : "0 atoms";
-    const orbitalLabel = selection.groupKeys.length
-      ? selection.groupKeys.join(" + ")
+    const orbitalLabel = selection.orbitalLabels.length
+      ? selection.orbitalLabels.slice(0, 5).join(" + ") +
+        (selection.orbitalLabels.length > 5 ? " ..." : "")
       : "no orbitals";
     const mode = data.mode === "soc" ? selection.socComponent : selection.spinChannel;
-    return `${modeLabel(data.mode)} • ${atomLabel} • ${orbitalLabel} • ${mode}`;
+    return `${modeLabel(data.mode)} • ${atomLabel} • ${selection.orbitalMode} • ${orbitalLabel} • ${mode}`;
   }
 
   function buildChannelDescriptors(data, selection) {
@@ -393,6 +512,31 @@
     );
   }
 
+  function colorForOrbital(label, index) {
+    const normalized = String(label || "").toLowerCase();
+    const explicitMap = {
+      s: "#c05a2b",
+      py: "#215f7d",
+      pz: "#2f6b4f",
+      px: "#7a56c5",
+      dxy: "#ab7a19",
+      dyz: "#cc5c39",
+      dz2: "#3b7bb5",
+      dxz: "#8f4aa1",
+      "x2-y2": "#8a3b69",
+      "dx2-y2": "#8a3b69",
+      tot: "#4c3d28",
+    };
+    return explicitMap[normalized] || orbitalPalette[index % orbitalPalette.length];
+  }
+
+  function colorForSelection(selectionItem, index) {
+    if (selectionItem.family && selectionItem.family !== "other") {
+      return colorForOrbital(selectionItem.family, index);
+    }
+    return colorForOrbital(selectionItem.label, index);
+  }
+
   function buildLineTrace(xValues, bandEntries, segments, energyShift, descriptor) {
     const x = [];
     const y = [];
@@ -420,18 +564,20 @@
         width: 1.2,
       },
       hoverinfo: "skip",
+      showlegend: false,
     };
   }
 
   function buildMarkerTrace(options) {
     const {
       descriptor,
+      traceLabel,
+      traceColor,
       xValues,
       bandEntries,
       weightMatrix,
       energyShift,
       selection,
-      signedColors,
     } = options;
     const x = [];
     const y = [];
@@ -478,7 +624,7 @@
       mode: "markers",
       x,
       y,
-      name: `${descriptor.label} projection`,
+      name: traceLabel,
       marker: {
         size: sizes,
         opacity: 0.72,
@@ -495,24 +641,7 @@
         "x %{x:.4f}<br>" +
         "E %{y:.4f} eV<extra></extra>",
     };
-
-    if (signedColors) {
-      trace.marker.color = weights;
-      trace.marker.colorscale = [
-        [0, "#215f7d"],
-        [0.5, "#f8f3eb"],
-        [1, "#b3472f"],
-      ];
-      trace.marker.cmin = -maxAbs;
-      trace.marker.cmax = maxAbs;
-      trace.marker.colorbar = {
-        title: "Signed projection",
-        thickness: 12,
-        len: 0.5,
-      };
-    } else {
-      trace.marker.color = descriptor.color;
-    }
+    trace.marker.color = traceColor;
 
     return trace;
   }
@@ -564,24 +693,29 @@
           descriptor.key,
           selection.socComponent,
         );
-        const weights = aggregateWeights(
-          projectionMatrix,
-          selection.atomIndices,
-          selection.orbitalIndices,
-        );
-        const markerTrace = buildMarkerTrace({
-          descriptor,
-          xValues: data.kpointDistances,
-          bandEntries,
-          weightMatrix: weights,
-          energyShift,
-          selection: { ...selection, energyMin, energyMax },
-          signedColors:
-            data.mode === "soc" && selection.socComponent !== "total" && data.hasMagnetization,
+        selection.orbitalSelections.forEach((orbital, orbitalOffset) => {
+          const weights = aggregateWeights(projectionMatrix, selection.atomIndices, orbital.indices);
+          const baseLabel =
+            data.mode === "collinear_spin"
+              ? `${descriptor.label} · ${orbital.label}`
+              : orbital.label;
+          const markerTrace = buildMarkerTrace({
+            descriptor,
+            traceLabel:
+              data.mode === "soc" && selection.socComponent !== "total"
+                ? `${baseLabel} (${selection.socComponent})`
+                : baseLabel,
+            traceColor: colorForSelection(orbital, orbitalOffset),
+            xValues: data.kpointDistances,
+            bandEntries,
+            weightMatrix: weights,
+            energyShift,
+            selection: { ...selection, energyMin, energyMax },
+          });
+          if (markerTrace) {
+            traces.push(markerTrace);
+          }
         });
-        if (markerTrace) {
-          traces.push(markerTrace);
-        }
       }
     });
 
@@ -665,6 +799,14 @@
       elements.socComponent,
       elements.atomSelection,
     ].forEach((input) => input.addEventListener("input", renderPlot));
+
+    elements.orbitalMode.addEventListener("input", () => {
+      if (!state.data) {
+        return;
+      }
+      populateOrbitalFilters(state.data);
+      renderPlot();
+    });
 
     elements.markerScale.addEventListener("input", () => {
       elements.markerScaleValue.textContent = elements.markerScale.value;

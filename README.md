@@ -105,3 +105,9 @@ node --check assets/vasprun-parser.js
 - For normal end-user usage, access the deployed app directly at `https://pband.cquctcmp.com/`.
 - `multi` mode is intended for comparing orbital projections, while PNG export is currently limited to `single` mode.
 - A modern desktop browser is recommended for large `vasprun.xml` files.
+
+## 开发说明 | Development Note
+
+本项目在开发过程中使用了 Codex 进行辅助编写、重构和文档整理。
+
+Codex was used during development to assist with implementation, refactoring, and documentation.

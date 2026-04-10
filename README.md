@@ -8,6 +8,14 @@ Access online: https://pband.cquctcmp.com/
 
 `pband_web` is a static browser app for loading VASP `vasprun.xml` files and interactively plotting projected band structures directly in the browser.
 
+## Demo
+
+<video src="./demo/demo.mov" controls muted playsinline width="100%">
+  Your browser does not support the video tag.
+</video>
+
+备用链接 / Fallback link: [demo.mov](./demo/demo.mov)
+
 ## 简介 | Overview
 
 - 无后端、无数据库、无构建步骤。

@@ -111,6 +111,12 @@ node --check assets/vasprun-parser.js
 - `multi` mode is intended for comparing orbital projections, while PNG export is currently limited to `single` mode.
 - A modern desktop browser is recommended for large `vasprun.xml` files.
 
+## 许可证 | License
+
+本项目采用 [`MIT`](./LICENSE) 许可证发布。
+
+This project is licensed under the [`MIT`](./LICENSE) License.
+
 ## 开发说明 | Development Note
 
 本项目在开发过程中使用了 Codex 进行辅助编写、重构和文档整理。

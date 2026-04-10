@@ -61,6 +61,48 @@
         </section>
 
         <section class="card">
+          <h2>Projection filters</h2>
+          <div class="field-grid">
+            <label id="spin-channel-wrap">
+              <span class="field-label">Spin display</span>
+              <select id="spin-channel"></select>
+            </label>
+            <label id="soc-component-wrap">
+              <span class="field-label">SOC component</span>
+              <select id="soc-component"></select>
+            </label>
+          </div>
+          <label>
+            <span class="field-label">Atom indices</span>
+            <input
+              id="atom-selection"
+              type="text"
+              placeholder="e.g. 1-4,8,10"
+              spellcheck="false"
+            />
+          </label>
+          <div>
+            <p class="field-label">Elements</p>
+            <div id="element-filters" class="pill-grid empty-state">
+              Load a file to populate element filters.
+            </div>
+          </div>
+          <div>
+            <p class="field-label">Orbitals</p>
+            <label>
+              <span class="field-label">Orbital view</span>
+              <select id="orbital-mode">
+                <option value="components">components</option>
+                <option value="families">families (s/p/d/f)</option>
+              </select>
+            </label>
+            <div id="orbital-filters" class="pill-grid empty-state">
+              Load a file with projected eigenvalues.
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
           <h2>View</h2>
           <div class="field-grid">
             <label>
@@ -106,48 +148,6 @@
             <span>Faint</span>
             <span id="marker-opacity-value">80%</span>
             <span>Solid</span>
-          </div>
-        </section>
-
-        <section class="card">
-          <h2>Projection filters</h2>
-          <div class="field-grid">
-            <label id="spin-channel-wrap">
-              <span class="field-label">Spin display</span>
-              <select id="spin-channel"></select>
-            </label>
-            <label id="soc-component-wrap">
-              <span class="field-label">SOC component</span>
-              <select id="soc-component"></select>
-            </label>
-          </div>
-          <label>
-            <span class="field-label">Atom indices</span>
-            <input
-              id="atom-selection"
-              type="text"
-              placeholder="e.g. 1-4,8,10"
-              spellcheck="false"
-            />
-          </label>
-          <div>
-            <p class="field-label">Elements</p>
-            <div id="element-filters" class="pill-grid empty-state">
-              Load a file to populate element filters.
-            </div>
-          </div>
-          <div>
-            <p class="field-label">Orbitals</p>
-            <label>
-              <span class="field-label">Orbital view</span>
-              <select id="orbital-mode">
-                <option value="components">components</option>
-                <option value="families">families (s/p/d/f)</option>
-              </select>
-            </label>
-            <div id="orbital-filters" class="pill-grid empty-state">
-              Load a file with projected eigenvalues.
-            </div>
           </div>
         </section>
       </aside>

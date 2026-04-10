@@ -1,6 +1,7 @@
 # pband_web
 
 访问在线地址: https://pband.cquctcmp.com/
+
 Access online: https://pband.cquctcmp.com/
 
 `pband_web` 是一个纯前端静态网页工具，用来直接读取 VASP 生成的 `vasprun.xml`，并在浏览器中交互式绘制 projected band structure。

@@ -6,13 +6,13 @@
 
 ## 简介 | Overview
 
-- 无后端、无数据库、无构建步骤，下载后即可使用。
+- 无后端、无数据库、无构建步骤。
 - 所有解析都在浏览器本地完成，不上传输入文件。
-- 使用本地 vendored `Plotly`，可离线运行。
+- 面向普通用户，推荐直接使用在线部署版本。
 
 - No backend, no database, and no build step.
 - All parsing happens locally in the browser.
-- Uses a vendored local `Plotly` bundle, so the app can run offline.
+- For end users, the recommended access path is the hosted deployment.
 
 ## 功能特性 | Features
 
@@ -38,23 +38,9 @@
 
 ## 快速开始 | Quick Start
 
-### 方式一：直接打开 | Option 1: Open Directly
+访问在线地址: ttps://pband.cquctcmp.com/
 
-```bash
-open index.html
-```
-
-### 方式二：本地静态服务 | Option 2: Serve Locally
-
-```bash
-python3 -m http.server 8123
-```
-
-然后在浏览器中打开 / Then open:
-
-```text
-http://127.0.0.1:8123/
-```
+Access online: https://pband.cquctcmp.com/
 
 ### 使用流程 | Basic Workflow
 
@@ -109,10 +95,10 @@ node --check assets/vasprun-parser.js
 
 ## 注意事项 | Notes
 
-- 输入文件不会上传到服务器，适合本地分析和离线使用。
+- 面向普通用户时，请直接使用在线部署地址：`https://pband.cquctcmp.com/`。
 - `multi` 模式用于比较不同轨道投影，但 PNG 导出仅支持 `single` 模式。
 - 建议使用现代桌面浏览器打开较大的 `vasprun.xml` 文件。
 
-- Input files are not uploaded to any server, which makes the app suitable for local and offline analysis.
+- For normal end-user usage, access the deployed app directly at `https://pband.cquctcmp.com/`.
 - `multi` mode is intended for comparing orbital projections, while PNG export is currently limited to `single` mode.
 - A modern desktop browser is recommended for large `vasprun.xml` files.

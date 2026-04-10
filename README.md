@@ -1,8 +1,8 @@
-# see_pband
+# pband_web
 
-`see_pband` 是一个纯前端静态网页工具，用来直接读取 VASP 生成的 `vasprun.xml`，并在浏览器中交互式绘制 projected band structure。
+`pband_web` 是一个纯前端静态网页工具，用来直接读取 VASP 生成的 `vasprun.xml`，并在浏览器中交互式绘制 projected band structure。
 
-`see_pband` is a static browser app for loading VASP `vasprun.xml` files and interactively plotting projected band structures directly in the browser.
+`pband_web` is a static browser app for loading VASP `vasprun.xml` files and interactively plotting projected band structures directly in the browser.
 
 ## 简介 | Overview
 

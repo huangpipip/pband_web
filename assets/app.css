@@ -112,6 +112,30 @@ dt {
   color: var(--muted);
 }
 
+.panel-link-row {
+  margin: 12px 0 0;
+}
+
+.panel-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-cool);
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(33, 95, 125, 0.22);
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.panel-link:hover,
+.panel-link:focus-visible {
+  color: var(--accent);
+  border-color: rgba(179, 71, 47, 0.42);
+}
+
 .card {
   border: 1px solid var(--line);
   border-radius: 18px;

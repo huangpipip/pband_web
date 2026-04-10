@@ -373,8 +373,69 @@ dd {
   min-height: 0;
   flex: 1 1 auto;
   padding: 10px 12px 12px;
+  overflow: auto;
   background:
     linear-gradient(180deg, rgba(255, 252, 246, 0.86) 0%, rgba(245, 236, 221, 0.78) 100%);
+}
+
+.plot-canvas {
+  width: 100%;
+  min-height: 100%;
+  height: 100%;
+}
+
+.plot-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-content: start;
+}
+
+.subplot-card {
+  border: 1px solid rgba(58, 43, 27, 0.14);
+  border-radius: 18px;
+  background: rgba(255, 250, 242, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  overflow: hidden;
+}
+
+.subplot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px 0;
+}
+
+.subplot-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.96rem;
+  font-weight: 700;
+}
+
+.subplot-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.subplot-plot {
+  min-height: 340px;
+  padding: 4px 6px 8px;
+}
+
+.plot-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 28px;
+  border: 1px dashed rgba(58, 43, 27, 0.22);
+  border-radius: 18px;
+  color: var(--muted);
+  background: rgba(255, 252, 246, 0.72);
+  text-align: center;
 }
 
 @media (max-width: 1080px) {
@@ -423,5 +484,13 @@ dd {
   .plot-surface {
     min-height: 72vh;
     flex: none;
+  }
+
+  .plot-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .subplot-plot {
+    min-height: 300px;
   }
 }

@@ -2,7 +2,10 @@
   const state = {
     data: null,
     markerColorOverrides: createEmptyMarkerColorOverrides(),
+    plotNodes: [],
     plotUiRevision: 0,
+    relayoutSyncInProgress: false,
+    sharedPlotRanges: createEmptyPlotRanges(),
   };
 
   const MATPLOTLIB_HIGH_CONTRAST_PALETTE = [
@@ -115,6 +118,7 @@
     markerOpacity: document.getElementById("marker-opacity"),
     markerOpacityValue: document.getElementById("marker-opacity-value"),
     markerOutline: document.getElementById("marker-outline"),
+    plotMode: document.getElementById("plot-mode"),
     plotTheme: document.getElementById("plot-theme"),
     spinChannel: document.getElementById("spin-channel"),
     socComponent: document.getElementById("soc-component"),
@@ -126,7 +130,7 @@
     orbitalFilters: document.getElementById("orbital-filters"),
     selectionSummary: document.getElementById("selection-summary"),
     plotTitle: document.getElementById("plot-title"),
-    plot: document.getElementById("plot"),
+    plotHost: document.getElementById("plot-host"),
   };
 
   function setStatus(message, isError) {
@@ -145,8 +149,19 @@
     };
   }
 
+  function createEmptyPlotRanges() {
+    return {
+      x: null,
+      y: null,
+    };
+  }
+
   function resetMarkerColorOverrides() {
     state.markerColorOverrides = createEmptyMarkerColorOverrides();
+  }
+
+  function resetSharedPlotRanges() {
+    state.sharedPlotRanges = createEmptyPlotRanges();
   }
 
   function orbitalColorScope(orbitalMode) {
@@ -163,6 +178,7 @@
 
   function invalidatePlotView() {
     state.plotUiRevision += 1;
+    resetSharedPlotRanges();
   }
 
   function nextFrame() {
@@ -182,7 +198,6 @@
     populateControls(data);
     updateSummary(data);
     renderPlot();
-    elements.exportButton.disabled = false;
     setStatus(`Loaded ${file.name}.`);
   }
 
@@ -237,6 +252,7 @@
     elements.markerOpacity.value = "80";
     elements.markerOpacityValue.textContent = "80%";
     elements.markerOutline.checked = false;
+    elements.plotMode.value = "single";
     elements.plotTheme.value = "sandstone";
     elements.atomSelection.value = "";
     elements.orbitalMode.value = "components";
@@ -601,6 +617,7 @@
       markerScale: Number(elements.markerScale.value),
       markerOpacity: Number(elements.markerOpacity.value) / 100,
       markerOutline: elements.markerOutline.checked,
+      plotMode: elements.plotMode.value,
       plotTheme: elements.plotTheme.value,
       selectedElements,
     };
@@ -924,80 +941,117 @@
     return themes[themeKey] || themes.sandstone;
   }
 
-  function renderPlot() {
-    if (!state.data) {
-      return;
-    }
+  function copyRange(range) {
+    return Array.isArray(range) && range.length === 2 ? [range[0], range[1]] : null;
+  }
 
-    const data = state.data;
-    const selection = currentSelection(data);
-    const theme = visualTheme(selection.plotTheme);
-    let energyMin = selection.energyMin;
-    let energyMax = selection.energyMax;
-    if (!(energyMin < energyMax)) {
-      energyMin = energyMax - 0.5;
+  function cloneTrace(trace) {
+    const cloned = { ...trace };
+    if (Array.isArray(trace.x)) {
+      cloned.x = [...trace.x];
     }
-    const energyShift = selection.alignToFermi ? data.fermiEnergy : 0;
-    const descriptors = buildChannelDescriptors(data, selection, theme);
-    const traces = [];
-
-    descriptors.forEach((descriptor) => {
-      const bandEntries = channelEnergyMatrix(data, descriptor.key);
-      if (!bandEntries.length) {
-        return;
+    if (Array.isArray(trace.y)) {
+      cloned.y = [...trace.y];
+    }
+    if (trace.line) {
+      cloned.line = { ...trace.line };
+    }
+    if (trace.marker) {
+      cloned.marker = { ...trace.marker };
+      if (Array.isArray(trace.marker.size)) {
+        cloned.marker.size = [...trace.marker.size];
       }
+      if (trace.marker.line) {
+        cloned.marker.line = { ...trace.marker.line };
+      }
+    }
+    if (Array.isArray(trace.customdata)) {
+      cloned.customdata = trace.customdata.map((item) => (Array.isArray(item) ? [...item] : item));
+    }
+    return cloned;
+  }
 
-      traces.push(
-        buildLineTrace(data.kpointDistances, bandEntries, data.segments, energyShift, descriptor),
-      );
+  function visibleRangesFromPlot(plotNode) {
+    const fullLayout = plotNode ? plotNode._fullLayout : null;
+    return {
+      x: copyRange(fullLayout && fullLayout.xaxis ? fullLayout.xaxis.range : null),
+      y: copyRange(fullLayout && fullLayout.yaxis ? fullLayout.yaxis.range : null),
+    };
+  }
 
-      if (data.hasProjection) {
-        const projectionMatrix = channelProjectionMatrix(
-          data,
-          descriptor.key,
-          selection.socComponent,
-        );
-        selection.orbitalSelections.forEach((orbital, orbitalOffset) => {
-          const weights = aggregateWeights(projectionMatrix, selection.atomIndices, orbital.indices);
-          const baseLabel =
-            data.mode === "collinear_spin"
-              ? `${descriptor.label} · ${orbital.label}`
-              : orbital.label;
-          const markerTrace = buildMarkerTrace({
-            descriptor,
-            traceLabel:
-              data.mode === "soc" && selection.socComponent !== "total"
-                ? `${baseLabel} (${selection.socComponent})`
-                : baseLabel,
-            traceColor: colorForSelection(orbital, orbitalOffset, selection.orbitalMode),
-            xValues: data.kpointDistances,
-            bandEntries,
-            weightMatrix: weights,
-            energyShift,
-            selection: { ...selection, energyMin, energyMax },
-          });
-          if (markerTrace) {
-            traces.push(markerTrace);
-          }
-        });
+  function rememberVisibleRanges(plotNode) {
+    state.sharedPlotRanges = visibleRangesFromPlot(plotNode);
+  }
+
+  function plotConfig() {
+    return {
+      responsive: true,
+      displaylogo: false,
+      modeBarButtonsToRemove: ["lasso2d", "select2d"],
+    };
+  }
+
+  function updateExportAvailability() {
+    const canExport = Boolean(state.data) && elements.plotMode.value === "single";
+    elements.exportButton.disabled = !canExport;
+    elements.exportButton.title =
+      state.data && elements.plotMode.value === "multi"
+        ? "Switch to single plot mode to export PNG."
+        : "";
+  }
+
+  function clearRenderedPlots() {
+    state.plotNodes.forEach((plotNode) => {
+      if (plotNode) {
+        Plotly.purge(plotNode);
       }
     });
+    state.plotNodes = [];
+    elements.plotHost.innerHTML = "";
+  }
 
-    elements.selectionSummary.textContent = summarizeSelection(data, selection);
-    elements.plotTitle.textContent =
-      data.mode === "soc" ? "Projected band structure with SOC" : "Projected band structure";
+  function renderPlotEmptyState(message) {
+    clearRenderedPlots();
+    const empty = document.createElement("div");
+    empty.className = "plot-empty-state";
+    empty.textContent = message;
+    elements.plotHost.appendChild(empty);
+  }
 
+  function buildPlotTitle(data, selection) {
+    if (selection.plotMode === "multi") {
+      return data.mode === "soc"
+        ? "Projected band structure by orbital with SOC"
+        : "Projected band structure by orbital";
+    }
+    return data.mode === "soc" ? "Projected band structure with SOC" : "Projected band structure";
+  }
+
+  function buildSelectionSummaryText(data, selection) {
+    const summary = summarizeSelection(data, selection);
+    return selection.plotMode === "multi" ? `${summary} • multi-view` : summary;
+  }
+
+  function buildPlotLayout(data, selection, theme, energyMin, energyMax, compact) {
     const layout = {
       uirevision: `plot-${state.plotUiRevision}`,
       paper_bgcolor: "rgba(0,0,0,0)",
       plot_bgcolor: theme.plotBg,
-      margin: {
-        l: 70,
-        r: 30,
-        t: 72,
-        b: 58,
-        autoexpand: false,
-      },
+      margin: compact
+        ? {
+            l: 62,
+            r: 16,
+            t: 22,
+            b: 52,
+            autoexpand: false,
+          }
+        : {
+            l: 70,
+            r: 30,
+            t: 72,
+            b: 58,
+            autoexpand: false,
+          },
       font: {
         color: theme.font,
       },
@@ -1019,7 +1073,6 @@
       },
       yaxis: {
         title: selection.alignToFermi ? "Energy - E_F (eV)" : "Energy (eV)",
-        range: [energyMin, energyMax],
         zeroline: true,
         zerolinecolor: theme.zero,
         zerolinewidth: 1.3,
@@ -1037,7 +1090,13 @@
           color: theme.font,
         },
       },
-      legend: {
+      shapes: boundaryShapes(data, energyMin, energyMax, theme),
+      hovermode: "closest",
+      showlegend: !compact,
+    };
+
+    if (!compact) {
+      layout.legend = {
         orientation: "h",
         x: 0,
         xanchor: "left",
@@ -1046,16 +1105,242 @@
         bgcolor: theme.legendBg,
         bordercolor: theme.legendBorder,
         borderwidth: 1,
-      },
-      shapes: boundaryShapes(data, energyMin, energyMax, theme),
-      hovermode: "closest",
+      };
+    }
+
+    const xRange = copyRange(state.sharedPlotRanges.x);
+    if (xRange) {
+      layout.xaxis.range = xRange;
+    } else {
+      layout.xaxis.autorange = true;
+    }
+
+    const yRange = copyRange(state.sharedPlotRanges.y);
+    layout.yaxis.range = yRange || [energyMin, energyMax];
+
+    return layout;
+  }
+
+  function buildPlotModel(data, selection, theme, energyMin, energyMax) {
+    const energyShift = selection.alignToFermi ? data.fermiEnergy : 0;
+    const descriptors = buildChannelDescriptors(data, selection, theme);
+    const lineTraces = [];
+    const orbitalPlots = selection.orbitalSelections.map((orbital, orbitalOffset) => ({
+      key: selectionColorKey(orbital),
+      label: orbital.label,
+      orbital,
+      orbitalOffset,
+      markerTraces: [],
+    }));
+
+    descriptors.forEach((descriptor) => {
+      const bandEntries = channelEnergyMatrix(data, descriptor.key);
+      if (!bandEntries.length) {
+        return;
+      }
+
+      lineTraces.push(
+        buildLineTrace(data.kpointDistances, bandEntries, data.segments, energyShift, descriptor),
+      );
+
+      if (!data.hasProjection) {
+        return;
+      }
+
+      const projectionMatrix = channelProjectionMatrix(data, descriptor.key, selection.socComponent);
+      orbitalPlots.forEach((orbitalPlot) => {
+        const weights = aggregateWeights(
+          projectionMatrix,
+          selection.atomIndices,
+          orbitalPlot.orbital.indices,
+        );
+        const baseLabel =
+          data.mode === "collinear_spin"
+            ? `${descriptor.label} · ${orbitalPlot.label}`
+            : orbitalPlot.label;
+        const markerTrace = buildMarkerTrace({
+          descriptor,
+          traceLabel:
+            data.mode === "soc" && selection.socComponent !== "total"
+              ? `${baseLabel} (${selection.socComponent})`
+              : baseLabel,
+          traceColor: colorForSelection(
+            orbitalPlot.orbital,
+            orbitalPlot.orbitalOffset,
+            selection.orbitalMode,
+          ),
+          xValues: data.kpointDistances,
+          bandEntries,
+          weightMatrix: weights,
+          energyShift,
+          selection: { ...selection, energyMin, energyMax },
+        });
+        if (markerTrace) {
+          orbitalPlot.markerTraces.push(markerTrace);
+        }
+      });
+    });
+
+    return {
+      lineTraces,
+      orbitalPlots,
+    };
+  }
+
+  function singlePlotTraces(model) {
+    return [
+      ...model.lineTraces,
+      ...model.orbitalPlots.flatMap((orbitalPlot) => orbitalPlot.markerTraces),
+    ];
+  }
+
+  function subplotMetaLabel(data, selection) {
+    const channel = data.mode === "soc" ? selection.socComponent : selection.spinChannel;
+    return `${modeLabel(data.mode)} • ${channel}`;
+  }
+
+  function attachSinglePlotListeners(plotNode) {
+    plotNode.on("plotly_relayout", () => {
+      if (state.relayoutSyncInProgress) {
+        return;
+      }
+      rememberVisibleRanges(plotNode);
+    });
+  }
+
+  function syncRangesFromSourcePlot(sourcePlotNode) {
+    if (state.relayoutSyncInProgress) {
+      return;
+    }
+
+    rememberVisibleRanges(sourcePlotNode);
+    const update = {
+      "xaxis.range": copyRange(state.sharedPlotRanges.x),
+      "yaxis.range": copyRange(state.sharedPlotRanges.y),
     };
 
-    Plotly.react(elements.plot, traces, layout, {
-      responsive: true,
-      displaylogo: false,
-      modeBarButtonsToRemove: ["lasso2d", "select2d"],
+    state.relayoutSyncInProgress = true;
+    Promise.all(
+      state.plotNodes
+        .filter((plotNode) => plotNode !== sourcePlotNode)
+        .map((plotNode) => Plotly.relayout(plotNode, update).catch(() => null)),
+    ).finally(() => {
+      state.relayoutSyncInProgress = false;
     });
+  }
+
+  function attachMultiPlotListeners(plotNode) {
+    plotNode.on("plotly_relayout", () => {
+      if (state.relayoutSyncInProgress || elements.plotMode.value !== "multi") {
+        return;
+      }
+      syncRangesFromSourcePlot(plotNode);
+    });
+  }
+
+  function renderSinglePlot(data, selection, theme, energyMin, energyMax, model) {
+    clearRenderedPlots();
+    const plotNode = document.createElement("div");
+    plotNode.className = "plot-canvas";
+    elements.plotHost.appendChild(plotNode);
+    state.plotNodes = [plotNode];
+
+    Plotly.react(
+      plotNode,
+      singlePlotTraces(model),
+      buildPlotLayout(data, selection, theme, energyMin, energyMax, false),
+      plotConfig(),
+    ).then(() => {
+      attachSinglePlotListeners(plotNode);
+    });
+  }
+
+  function renderMultiPlotGrid(data, selection, theme, energyMin, energyMax, model) {
+    clearRenderedPlots();
+
+    if (!data.hasProjection) {
+      renderPlotEmptyState("Multi-plot mode requires projected eigenvalues.");
+      return;
+    }
+
+    if (!selection.orbitalSelections.length) {
+      renderPlotEmptyState("Select at least one orbital or family filter to compare in multi mode.");
+      return;
+    }
+
+    const grid = document.createElement("div");
+    grid.className = "plot-grid";
+    const meta = subplotMetaLabel(data, selection);
+
+    model.orbitalPlots.forEach((orbitalPlot) => {
+      const card = document.createElement("section");
+      card.className = "subplot-card";
+
+      const header = document.createElement("div");
+      header.className = "subplot-header";
+
+      const title = document.createElement("h3");
+      title.className = "subplot-title";
+      title.textContent = orbitalPlot.label;
+
+      const metaLabel = document.createElement("span");
+      metaLabel.className = "subplot-meta";
+      metaLabel.textContent = meta;
+
+      const plotNode = document.createElement("div");
+      plotNode.className = "subplot-plot";
+
+      header.appendChild(title);
+      header.appendChild(metaLabel);
+      card.appendChild(header);
+      card.appendChild(plotNode);
+      grid.appendChild(card);
+      state.plotNodes.push(plotNode);
+
+      const traces = [
+        ...model.lineTraces.map(cloneTrace),
+        ...orbitalPlot.markerTraces.map(cloneTrace),
+      ];
+
+      Plotly.react(
+        plotNode,
+        traces,
+        buildPlotLayout(data, selection, theme, energyMin, energyMax, true),
+        plotConfig(),
+      ).then(() => {
+        attachMultiPlotListeners(plotNode);
+      });
+    });
+
+    elements.plotHost.appendChild(grid);
+  }
+
+  function renderPlot() {
+    updateExportAvailability();
+    if (!state.data) {
+      clearRenderedPlots();
+      return;
+    }
+
+    const data = state.data;
+    const selection = currentSelection(data);
+    const theme = visualTheme(selection.plotTheme);
+    let energyMin = selection.energyMin;
+    let energyMax = selection.energyMax;
+    if (!(energyMin < energyMax)) {
+      energyMin = energyMax - 0.5;
+    }
+
+    elements.selectionSummary.textContent = buildSelectionSummaryText(data, selection);
+    elements.plotTitle.textContent = buildPlotTitle(data, selection);
+
+    const model = buildPlotModel(data, selection, theme, energyMin, energyMax);
+    if (selection.plotMode === "multi") {
+      renderMultiPlotGrid(data, selection, theme, energyMin, energyMax, model);
+      return;
+    }
+
+    renderSinglePlot(data, selection, theme, energyMin, energyMax, model);
   }
 
   function resetFilters() {
@@ -1080,17 +1365,18 @@
         console.error(error);
         state.data = null;
         setUploadCardIdle(true);
-        elements.exportButton.disabled = true;
+        updateExportAvailability();
         setStatus(error.message || "Failed to parse vasprun.xml.", true);
       }
     });
 
     elements.resetButton.addEventListener("click", resetFilters);
     elements.exportButton.addEventListener("click", () => {
-      if (!state.data) {
+      const plotNode = state.plotNodes[0];
+      if (!state.data || elements.plotMode.value !== "single" || !plotNode) {
         return;
       }
-      Plotly.downloadImage(elements.plot, {
+      Plotly.downloadImage(plotNode, {
         format: "png",
         filename: "projected-band-structure",
         scale: 2,
@@ -1106,6 +1392,7 @@
 
     [
       elements.markerOutline,
+      elements.plotMode,
       elements.plotTheme,
       elements.spinChannel,
       elements.socComponent,
@@ -1129,6 +1416,8 @@
       elements.markerOpacityValue.textContent = `${elements.markerOpacity.value}%`;
       renderPlot();
     });
+
+    updateExportAvailability();
   }
 
   bindEvents();

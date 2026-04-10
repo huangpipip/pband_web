@@ -371,6 +371,7 @@ dd {
 
 .plot-surface {
   min-height: 0;
+  min-width: 0;
   flex: 1 1 auto;
   padding: 10px 12px 12px;
   overflow: auto;
@@ -386,12 +387,16 @@ dd {
 
 .plot-grid {
   display: grid;
+  min-width: 0;
   gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-content: start;
 }
 
 .subplot-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   border: 1px solid rgba(58, 43, 27, 0.14);
   border-radius: 18px;
   background: rgba(255, 250, 242, 0.82);
@@ -421,8 +426,18 @@ dd {
 }
 
 .subplot-plot {
+  width: 100%;
+  min-width: 0;
   min-height: 340px;
   padding: 4px 6px 8px;
+  overflow: hidden;
+}
+
+.subplot-plot .js-plotly-plot,
+.subplot-plot .plot-container,
+.subplot-plot .svg-container {
+  width: 100% !important;
+  max-width: 100%;
 }
 
 .plot-empty-state {
@@ -436,6 +451,18 @@ dd {
   color: var(--muted);
   background: rgba(255, 252, 246, 0.72);
   text-align: center;
+}
+
+@media (max-width: 1680px) {
+  .plot-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1280px) {
+  .plot-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 1080px) {

@@ -1056,7 +1056,7 @@
         color: theme.font,
       },
       xaxis: {
-        title: "k-path distance",
+        title: compact ? "" : "k-path distance",
         zeroline: false,
         showgrid: false,
         showline: true,
@@ -1072,7 +1072,7 @@
         },
       },
       yaxis: {
-        title: selection.alignToFermi ? "Energy - E_F (eV)" : "Energy (eV)",
+        title: compact ? "" : selection.alignToFermi ? "Energy - E_F (eV)" : "Energy (eV)",
         zeroline: true,
         zerolinecolor: theme.zero,
         zerolinewidth: 1.3,
@@ -1271,6 +1271,9 @@
     const grid = document.createElement("div");
     grid.className = "plot-grid";
     const meta = subplotMetaLabel(data, selection);
+    const plotEntries = [];
+
+    elements.plotHost.appendChild(grid);
 
     model.orbitalPlots.forEach((orbitalPlot) => {
       const card = document.createElement("section");
@@ -1296,23 +1299,32 @@
       card.appendChild(plotNode);
       grid.appendChild(card);
       state.plotNodes.push(plotNode);
-
-      const traces = [
-        ...model.lineTraces.map(cloneTrace),
-        ...orbitalPlot.markerTraces.map(cloneTrace),
-      ];
-
-      Plotly.react(
+      plotEntries.push({
         plotNode,
-        traces,
-        buildPlotLayout(data, selection, theme, energyMin, energyMax, true),
-        plotConfig(),
-      ).then(() => {
-        attachMultiPlotListeners(plotNode);
+        traces: [
+          ...model.lineTraces.map(cloneTrace),
+          ...orbitalPlot.markerTraces.map(cloneTrace),
+        ],
       });
     });
 
-    elements.plotHost.appendChild(grid);
+    requestAnimationFrame(() => {
+      if (!grid.isConnected) {
+        return;
+      }
+
+      plotEntries.forEach(({ plotNode, traces }) => {
+        Plotly.react(
+          plotNode,
+          traces,
+          buildPlotLayout(data, selection, theme, energyMin, energyMax, true),
+          plotConfig(),
+        ).then(() => {
+          attachMultiPlotListeners(plotNode);
+          Plotly.Plots.resize(plotNode).catch(() => null);
+        });
+      });
+    });
   }
 
   function renderPlot() {

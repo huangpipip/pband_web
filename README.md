@@ -10,11 +10,7 @@ Access online: https://pband.cquctcmp.com/
 
 ## Demo
 
-<video src="./demo/demo.mov" controls muted playsinline width="100%">
-  Your browser does not support the video tag.
-</video>
-
-备用链接 / Fallback link: [demo.mov](./demo/demo.mov)
+https://github.com/user-attachments/assets/f7b203cf-b6aa-42a5-ac52-6ab53da07563
 
 ## 简介 | Overview
 

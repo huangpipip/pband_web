@@ -1,6 +1,7 @@
 (function () {
   const state = {
     data: null,
+    markerColorOverrides: createEmptyMarkerColorOverrides(),
     plotUiRevision: 0,
   };
 
@@ -100,6 +101,7 @@
   };
 
   const elements = {
+    uploadCard: document.getElementById("upload-card"),
     fileInput: document.getElementById("file-input"),
     resetButton: document.getElementById("reset-button"),
     exportButton: document.getElementById("export-button"),
@@ -132,6 +134,33 @@
     elements.statusLine.classList.toggle("error", Boolean(isError));
   }
 
+  function setUploadCardIdle(isIdle) {
+    elements.uploadCard.classList.toggle("upload-card-idle", Boolean(isIdle));
+  }
+
+  function createEmptyMarkerColorOverrides() {
+    return {
+      components: Object.create(null),
+      families: Object.create(null),
+    };
+  }
+
+  function resetMarkerColorOverrides() {
+    state.markerColorOverrides = createEmptyMarkerColorOverrides();
+  }
+
+  function orbitalColorScope(orbitalMode) {
+    return orbitalMode === "families" ? "families" : "components";
+  }
+
+  function colorOverrideStore(orbitalMode) {
+    return state.markerColorOverrides[orbitalColorScope(orbitalMode)];
+  }
+
+  function selectionColorKey(selectionItem) {
+    return String(selectionItem.colorKey || selectionItem.label || "orbital");
+  }
+
   function invalidatePlotView() {
     state.plotUiRevision += 1;
   }
@@ -148,6 +177,7 @@
     await nextFrame();
     const data = window.VasprunParser.parse(xmlText);
     state.data = data;
+    setUploadCardIdle(false);
     invalidatePlotView();
     populateControls(data);
     updateSummary(data);
@@ -198,6 +228,7 @@
 
   function populateControls(data) {
     const windowRange = defaultWindow(data);
+    resetMarkerColorOverrides();
     elements.energyMin.value = windowRange.min;
     elements.energyMax.value = windowRange.max;
     elements.alignFermi.checked = true;
@@ -413,19 +444,62 @@
     }
 
     elements.orbitalFilters.classList.remove("empty-state");
-    entries.forEach((entry) => {
+    entries.forEach((entry, index) => {
+      const pill = document.createElement("div");
+      pill.className = "pill pill-with-color";
       const label = document.createElement("label");
-      label.className = "pill";
+      label.className = "pill-toggle";
       const input = document.createElement("input");
       input.type = "checkbox";
       input.checked = false;
       input.dataset.selectionLabel = entry.label;
       input.dataset.selectionIndices = entry.indices.join(",");
       input.dataset.selectionFamily = entry.family;
+      input.dataset.selectionColorKey = entry.label;
       input.addEventListener("change", renderPlot);
+
+      const colorButton = document.createElement("button");
+      colorButton.type = "button";
+      colorButton.className = "pill-color-swatch";
+      colorButton.title = `Set marker color for ${entry.label}`;
+      colorButton.setAttribute("aria-label", `Set marker color for ${entry.label}`);
+
+      const colorInput = document.createElement("input");
+      colorInput.type = "color";
+      colorInput.className = "pill-color-input";
+      colorInput.tabIndex = -1;
+
+      const entrySelection = {
+        label: entry.label,
+        family: entry.family,
+        colorKey: entry.label,
+      };
+      const syncColorUi = (color) => {
+        colorButton.style.backgroundColor = color;
+        colorInput.value = color;
+      };
+      syncColorUi(colorForSelection(entrySelection, index, elements.orbitalMode.value));
+
+      colorButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        colorInput.click();
+      });
+
+      const applyColorChange = () => {
+        colorOverrideStore(elements.orbitalMode.value)[entry.label] = colorInput.value;
+        syncColorUi(colorInput.value);
+        renderPlot();
+      };
+      colorInput.addEventListener("input", applyColorChange);
+      colorInput.addEventListener("change", applyColorChange);
+
       label.appendChild(input);
       label.appendChild(document.createTextNode(entry.label));
-      elements.orbitalFilters.appendChild(label);
+      pill.appendChild(label);
+      pill.appendChild(colorButton);
+      pill.appendChild(colorInput);
+      elements.orbitalFilters.appendChild(pill);
     });
   }
 
@@ -503,6 +577,7 @@
           .filter((value) => Number.isInteger(value))
           .sort((a, b) => a - b),
         label: input.dataset.selectionLabel || "orbital",
+        colorKey: input.dataset.selectionColorKey || input.dataset.selectionLabel || "orbital",
         family: input.dataset.selectionFamily || "other",
       }))
       .filter((item) => item.indices.length > 0)
@@ -632,11 +707,19 @@
     );
   }
 
-  function colorForSelection(selectionItem, index) {
+  function defaultColorForSelection(selectionItem, index) {
+    if (selectionItem.label) {
+      return colorForOrbital(selectionItem.label, index);
+    }
     if (selectionItem.family && selectionItem.family !== "other") {
       return colorForOrbital(selectionItem.family, index);
     }
-    return colorForOrbital(selectionItem.label, index);
+    return colorForOrbital("other", index);
+  }
+
+  function colorForSelection(selectionItem, index, orbitalMode) {
+    const override = colorOverrideStore(orbitalMode)[selectionColorKey(selectionItem)];
+    return override || defaultColorForSelection(selectionItem, index);
   }
 
   function buildLineTrace(xValues, bandEntries, segments, energyShift, descriptor) {
@@ -886,7 +969,7 @@
               data.mode === "soc" && selection.socComponent !== "total"
                 ? `${baseLabel} (${selection.socComponent})`
                 : baseLabel,
-            traceColor: colorForSelection(orbital, orbitalOffset),
+            traceColor: colorForSelection(orbital, orbitalOffset, selection.orbitalMode),
             xValues: data.kpointDistances,
             bandEntries,
             weightMatrix: weights,
@@ -996,6 +1079,7 @@
       } catch (error) {
         console.error(error);
         state.data = null;
+        setUploadCardIdle(true);
         elements.exportButton.disabled = true;
         setStatus(error.message || "Failed to parse vasprun.xml.", true);
       }

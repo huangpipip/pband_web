@@ -119,6 +119,22 @@ dt {
   padding: 16px;
 }
 
+.upload-card {
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.upload-card.upload-card-idle {
+  border-color: rgba(179, 71, 47, 0.38);
+  background:
+    linear-gradient(180deg, rgba(255, 250, 242, 0.98) 0%, rgba(252, 239, 224, 0.98) 100%);
+  box-shadow:
+    0 0 0 1px rgba(179, 71, 47, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
 .card h2 {
   margin-bottom: 14px;
   font-size: 1.05rem;
@@ -264,6 +280,51 @@ dd {
 
 .pill input {
   margin: 0;
+}
+
+.pill-with-color {
+  position: relative;
+  gap: 10px;
+  padding-right: 10px;
+}
+
+.pill-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.pill-color-swatch {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  padding: 0;
+  border-radius: 999px;
+  border: 2px solid rgba(31, 27, 22, 0.18);
+  background: #fffdf9;
+  box-shadow: none;
+}
+
+.pill-color-swatch:hover {
+  transform: none;
+  border-color: rgba(31, 27, 22, 0.34);
+}
+
+.pill-color-swatch:focus-visible {
+  outline: 2px solid rgba(179, 71, 47, 0.38);
+  outline-offset: 2px;
+}
+
+.pill-color-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .chart-panel {

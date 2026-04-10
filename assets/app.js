@@ -6,6 +6,7 @@
     plotUiRevision: 0,
     relayoutSyncInProgress: false,
     sharedPlotRanges: createEmptyPlotRanges(),
+    lastAlignToFermi: true,
   };
 
   const MATPLOTLIB_HIGH_CONTRAST_PALETTE = [
@@ -258,12 +259,42 @@
     };
   }
 
+  function formatEnergyInputValue(value) {
+    if (!Number.isFinite(value)) {
+      return "";
+    }
+    const rounded = Number(value.toFixed(4));
+    return String(Object.is(rounded, -0) ? 0 : rounded);
+  }
+
+  function syncEnergyWindowToAlignment(data, nextAlignToFermi) {
+    if (!data) {
+      state.lastAlignToFermi = nextAlignToFermi;
+      return;
+    }
+
+    if (state.lastAlignToFermi === nextAlignToFermi) {
+      return;
+    }
+
+    const energyMin = Number(elements.energyMin.value);
+    const energyMax = Number(elements.energyMax.value);
+    if (Number.isFinite(energyMin) && Number.isFinite(energyMax)) {
+      const shift = nextAlignToFermi ? -data.fermiEnergy : data.fermiEnergy;
+      elements.energyMin.value = formatEnergyInputValue(energyMin + shift);
+      elements.energyMax.value = formatEnergyInputValue(energyMax + shift);
+    }
+
+    state.lastAlignToFermi = nextAlignToFermi;
+  }
+
   function populateControls(data) {
     const windowRange = defaultWindow(data);
     resetMarkerColorOverrides();
     elements.energyMin.value = windowRange.min;
     elements.energyMax.value = windowRange.max;
     elements.alignFermi.checked = true;
+    state.lastAlignToFermi = true;
     elements.markerScale.value = "18";
     elements.markerScaleValue.textContent = "18";
     elements.markerOpacity.value = "80";
@@ -865,6 +896,93 @@
     return trace;
   }
 
+  function roundToStep(value, step) {
+    if (!Number.isFinite(value) || !Number.isFinite(step) || step <= 0) {
+      return value;
+    }
+    return Math.round(value / step) * step;
+  }
+
+  function nextTickValue(min, step) {
+    if (!Number.isFinite(min) || !Number.isFinite(step) || step <= 0) {
+      return min;
+    }
+    return Math.ceil((min - 1e-9) / step) * step;
+  }
+
+  function denseYAxisConfig(selection, energyMin) {
+    if (selection.alignToFermi) {
+      return null;
+    }
+
+    const majorStep = 0.5;
+    return {
+      tick0: roundToStep(nextTickValue(energyMin, majorStep), majorStep),
+      dtick: majorStep,
+    };
+  }
+
+  function horizontalLineShape(yValue, theme, lineOverrides) {
+    return {
+      type: "line",
+      layer: "below",
+      xref: "paper",
+      x0: 0,
+      x1: 1,
+      yref: "y",
+      y0: yValue,
+      y1: yValue,
+      line: lineOverrides
+        ? { ...lineOverrides }
+        : {
+            color: theme.grid,
+            width: 1,
+          },
+    };
+  }
+
+  function fermiLevelShape(data, selection, energyMin, energyMax, theme) {
+    if (selection.alignToFermi || data.fermiEnergy < energyMin || data.fermiEnergy > energyMax) {
+      return null;
+    }
+
+    return horizontalLineShape(data.fermiEnergy, theme, {
+      color: theme.fermiLine,
+      width: 1.6,
+      dash: "dash",
+    });
+  }
+
+  function fermiLevelAnnotation(data, selection, energyMin, energyMax, theme, compact) {
+    if (selection.alignToFermi || data.fermiEnergy < energyMin || data.fermiEnergy > energyMax) {
+      return null;
+    }
+
+    const span = Math.max(energyMax - energyMin, 0.1);
+    const nearTop = data.fermiEnergy > energyMax - span * 0.08;
+    const nearBottom = data.fermiEnergy < energyMin + span * 0.08;
+
+    return {
+      xref: "paper",
+      x: 0.99,
+      xanchor: "right",
+      yref: "y",
+      y: data.fermiEnergy,
+      yanchor: nearTop ? "top" : "bottom",
+      yshift: nearTop && !nearBottom ? -4 : 4,
+      text: "E_F",
+      showarrow: false,
+      font: {
+        color: theme.font,
+        size: compact ? 11 : 12,
+      },
+      bgcolor: theme.fermiLabelBg,
+      bordercolor: theme.fermiLabelBorder,
+      borderwidth: 1,
+      borderpad: compact ? 2 : 3,
+    };
+  }
+
   function boundaryShapes(data, energyMin, energyMax, theme) {
     return data.boundaryPositions.map((position) => ({
       type: "line",
@@ -880,6 +998,19 @@
     }));
   }
 
+  function plotShapes(data, selection, energyMin, energyMax, theme) {
+    const yAxisDensity = denseYAxisConfig(selection, energyMin);
+    const shapes = [...boundaryShapes(data, energyMin, energyMax, theme)];
+    const fermiShape = fermiLevelShape(data, selection, energyMin, energyMax, theme);
+    if (fermiShape) {
+      shapes.push(fermiShape);
+    }
+    return {
+      shapes,
+      yAxisDensity,
+    };
+  }
+
   function visualTheme(themeKey) {
     const themes = {
       sandstone: {
@@ -890,6 +1021,9 @@
         tickLine: "rgba(34,28,21,0.36)",
         zero: "rgba(34,28,21,0.34)",
         grid: "rgba(34,28,21,0.14)",
+        fermiLine: "rgba(143,54,37,0.88)",
+        fermiLabelBg: "rgba(255, 251, 244, 0.94)",
+        fermiLabelBorder: "rgba(143,54,37,0.3)",
         legendBg: "rgba(255, 251, 244, 0.88)",
         legendBorder: "rgba(58,43,27,0.18)",
         boundary: "rgba(34,28,21,0.18)",
@@ -908,6 +1042,9 @@
         tickLine: "rgba(25,22,22,0.34)",
         zero: "rgba(25,22,22,0.28)",
         grid: "rgba(25,22,22,0.1)",
+        fermiLine: "rgba(123,47,47,0.82)",
+        fermiLabelBg: "rgba(255,255,255,0.94)",
+        fermiLabelBorder: "rgba(123,47,47,0.24)",
         legendBg: "rgba(255,255,255,0.92)",
         legendBorder: "rgba(25,22,22,0.14)",
         boundary: "rgba(25,22,22,0.15)",
@@ -926,6 +1063,9 @@
         tickLine: "rgba(20,37,54,0.34)",
         zero: "rgba(20,37,54,0.28)",
         grid: "rgba(20,37,54,0.12)",
+        fermiLine: "rgba(23,79,120,0.86)",
+        fermiLabelBg: "rgba(241,246,251,0.94)",
+        fermiLabelBorder: "rgba(23,79,120,0.26)",
         legendBg: "rgba(241,246,251,0.9)",
         legendBorder: "rgba(20,37,54,0.16)",
         boundary: "rgba(20,37,54,0.17)",
@@ -944,6 +1084,9 @@
         tickLine: "rgba(29,43,31,0.34)",
         zero: "rgba(29,43,31,0.28)",
         grid: "rgba(29,43,31,0.12)",
+        fermiLine: "rgba(53,92,58,0.86)",
+        fermiLabelBg: "rgba(244,248,240,0.94)",
+        fermiLabelBorder: "rgba(53,92,58,0.24)",
         legendBg: "rgba(244,248,240,0.9)",
         legendBorder: "rgba(29,43,31,0.16)",
         boundary: "rgba(29,43,31,0.17)",
@@ -1050,6 +1193,7 @@
   }
 
   function buildPlotLayout(data, selection, theme, energyMin, energyMax, compact) {
+    const decorations = plotShapes(data, selection, energyMin, energyMax, theme);
     const layout = {
       uirevision: `plot-${state.plotUiRevision}`,
       paper_bgcolor: "rgba(0,0,0,0)",
@@ -1090,7 +1234,7 @@
       },
       yaxis: {
         title: compact ? "" : selection.alignToFermi ? "Energy - E_F (eV)" : "Energy (eV)",
-        zeroline: true,
+        zeroline: selection.alignToFermi,
         zerolinecolor: theme.zero,
         zerolinewidth: 1.3,
         gridcolor: theme.grid,
@@ -1107,10 +1251,29 @@
           color: theme.font,
         },
       },
-      shapes: boundaryShapes(data, energyMin, energyMax, theme),
+      shapes: decorations.shapes,
       hovermode: "closest",
       showlegend: !compact,
     };
+
+    if (decorations.yAxisDensity) {
+      layout.yaxis.tickmode = "linear";
+      layout.yaxis.tick0 = decorations.yAxisDensity.tick0;
+      layout.yaxis.dtick = decorations.yAxisDensity.dtick;
+      layout.yaxis.tickformat = ".1f";
+    }
+
+    const fermiAnnotation = fermiLevelAnnotation(
+      data,
+      selection,
+      energyMin,
+      energyMax,
+      theme,
+      compact,
+    );
+    if (fermiAnnotation) {
+      layout.annotations = [fermiAnnotation];
+    }
 
     if (!compact) {
       layout.legend = {
@@ -1442,12 +1605,18 @@
       });
     });
 
-    [elements.energyMin, elements.energyMax, elements.alignFermi].forEach((input) =>
+    [elements.energyMin, elements.energyMax].forEach((input) =>
       input.addEventListener("input", () => {
         invalidatePlotView();
         renderPlot();
       }),
     );
+
+    elements.alignFermi.addEventListener("input", () => {
+      syncEnergyWindowToAlignment(state.data, elements.alignFermi.checked);
+      invalidatePlotView();
+      renderPlot();
+    });
 
     [
       elements.markerOutline,

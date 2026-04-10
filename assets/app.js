@@ -118,7 +118,7 @@
     markerOpacity: document.getElementById("marker-opacity"),
     markerOpacityValue: document.getElementById("marker-opacity-value"),
     markerOutline: document.getElementById("marker-outline"),
-    plotMode: document.getElementById("plot-mode"),
+    plotModeToggle: document.getElementById("plot-mode-toggle"),
     plotTheme: document.getElementById("plot-theme"),
     spinChannel: document.getElementById("spin-channel"),
     socComponent: document.getElementById("soc-component"),
@@ -174,6 +174,23 @@
 
   function selectionColorKey(selectionItem) {
     return String(selectionItem.colorKey || selectionItem.label || "orbital");
+  }
+
+  function plotModeButtons() {
+    return Array.from(elements.plotModeToggle.querySelectorAll("[data-plot-mode]"));
+  }
+
+  function currentPlotMode() {
+    const activeButton = elements.plotModeToggle.querySelector(".is-active[data-plot-mode]");
+    return activeButton ? activeButton.dataset.plotMode : "single";
+  }
+
+  function setPlotMode(mode) {
+    plotModeButtons().forEach((button) => {
+      const isActive = button.dataset.plotMode === mode;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
   }
 
   function invalidatePlotView() {
@@ -252,7 +269,7 @@
     elements.markerOpacity.value = "80";
     elements.markerOpacityValue.textContent = "80%";
     elements.markerOutline.checked = false;
-    elements.plotMode.value = "single";
+    setPlotMode("single");
     elements.plotTheme.value = "sandstone";
     elements.atomSelection.value = "";
     elements.orbitalMode.value = "components";
@@ -617,7 +634,7 @@
       markerScale: Number(elements.markerScale.value),
       markerOpacity: Number(elements.markerOpacity.value) / 100,
       markerOutline: elements.markerOutline.checked,
-      plotMode: elements.plotMode.value,
+      plotMode: currentPlotMode(),
       plotTheme: elements.plotTheme.value,
       selectedElements,
     };
@@ -992,10 +1009,10 @@
   }
 
   function updateExportAvailability() {
-    const canExport = Boolean(state.data) && elements.plotMode.value === "single";
+    const canExport = Boolean(state.data) && currentPlotMode() === "single";
     elements.exportButton.disabled = !canExport;
     elements.exportButton.title =
-      state.data && elements.plotMode.value === "multi"
+      state.data && currentPlotMode() === "multi"
         ? "Switch to single plot mode to export PNG."
         : "";
   }
@@ -1199,6 +1216,33 @@
     return `${modeLabel(data.mode)} • ${channel}`;
   }
 
+  function multiPlotColumnCount(plotCount) {
+    if (window.innerWidth <= 720) {
+      return 1;
+    }
+    if (window.innerWidth <= 1280) {
+      return Math.min(plotCount, 2);
+    }
+    if (window.innerWidth <= 1680) {
+      return Math.min(plotCount, 3);
+    }
+    return Math.min(plotCount, 4);
+  }
+
+  function applyMultiPlotGridLayout(grid, plotCount) {
+    const gap = 14;
+    const columns = Math.max(1, multiPlotColumnCount(plotCount));
+    const rows = Math.max(1, Math.ceil(plotCount / columns));
+    const availableHeight = Math.max(elements.plotHost.clientHeight - 4, 0);
+    const fillHeight =
+      rows > 0 ? Math.floor((availableHeight - gap * (rows - 1)) / rows) : availableHeight;
+    const subplotHeight = Math.max(280, fillHeight || 0);
+
+    grid.style.setProperty("--plot-columns", String(columns));
+    grid.style.setProperty("--plot-grid-gap", `${gap}px`);
+    grid.style.setProperty("--subplot-height", `${subplotHeight}px`);
+  }
+
   function attachSinglePlotListeners(plotNode) {
     plotNode.on("plotly_relayout", () => {
       if (state.relayoutSyncInProgress) {
@@ -1231,7 +1275,7 @@
 
   function attachMultiPlotListeners(plotNode) {
     plotNode.on("plotly_relayout", () => {
-      if (state.relayoutSyncInProgress || elements.plotMode.value !== "multi") {
+      if (state.relayoutSyncInProgress || currentPlotMode() !== "multi") {
         return;
       }
       syncRangesFromSourcePlot(plotNode);
@@ -1274,6 +1318,7 @@
     const plotEntries = [];
 
     elements.plotHost.appendChild(grid);
+    applyMultiPlotGridLayout(grid, model.orbitalPlots.length);
 
     model.orbitalPlots.forEach((orbitalPlot) => {
       const card = document.createElement("section");
@@ -1365,6 +1410,8 @@
   }
 
   function bindEvents() {
+    let resizeFrameId = 0;
+
     elements.fileInput.addEventListener("change", async (event) => {
       const [file] = event.target.files || [];
       if (!file) {
@@ -1385,7 +1432,7 @@
     elements.resetButton.addEventListener("click", resetFilters);
     elements.exportButton.addEventListener("click", () => {
       const plotNode = state.plotNodes[0];
-      if (!state.data || elements.plotMode.value !== "single" || !plotNode) {
+      if (!state.data || currentPlotMode() !== "single" || !plotNode) {
         return;
       }
       Plotly.downloadImage(plotNode, {
@@ -1404,12 +1451,22 @@
 
     [
       elements.markerOutline,
-      elements.plotMode,
       elements.plotTheme,
       elements.spinChannel,
       elements.socComponent,
       elements.atomSelection,
     ].forEach((input) => input.addEventListener("input", renderPlot));
+
+    plotModeButtons().forEach((button) => {
+      button.addEventListener("click", () => {
+        const nextMode = button.dataset.plotMode;
+        if (!nextMode || nextMode === currentPlotMode()) {
+          return;
+        }
+        setPlotMode(nextMode);
+        renderPlot();
+      });
+    });
 
     elements.orbitalMode.addEventListener("input", () => {
       if (!state.data) {
@@ -1429,6 +1486,20 @@
       renderPlot();
     });
 
+    window.addEventListener("resize", () => {
+      if (!state.data || currentPlotMode() !== "multi") {
+        return;
+      }
+      if (resizeFrameId) {
+        cancelAnimationFrame(resizeFrameId);
+      }
+      resizeFrameId = requestAnimationFrame(() => {
+        resizeFrameId = 0;
+        renderPlot();
+      });
+    });
+
+    setPlotMode(currentPlotMode());
     updateExportAvailability();
   }
 

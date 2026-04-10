@@ -255,6 +255,32 @@ dd {
   font-size: 0.82rem;
 }
 
+.toggle-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.toggle-button {
+  padding: 12px 14px;
+  border: 1px solid rgba(78, 61, 40, 0.2);
+  border-radius: 14px;
+  color: var(--text);
+  background: rgba(255, 252, 246, 0.9);
+  box-shadow: none;
+}
+
+.toggle-button:hover {
+  transform: translateY(-1px);
+}
+
+.toggle-button.is-active {
+  color: #fff8f1;
+  background: linear-gradient(135deg, #c05633, #8f3625);
+  border-color: rgba(143, 54, 37, 0.34);
+  box-shadow: 0 10px 24px rgba(143, 54, 37, 0.16);
+}
+
 .pill-grid {
   display: flex;
   flex-wrap: wrap;
@@ -387,16 +413,21 @@ dd {
 
 .plot-grid {
   display: grid;
+  width: 100%;
   min-width: 0;
-  gap: 14px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  align-content: start;
+  min-height: 100%;
+  gap: var(--plot-grid-gap, 14px);
+  grid-template-columns: repeat(var(--plot-columns, 4), minmax(0, 1fr));
+  grid-auto-rows: var(--subplot-height, 340px);
+  align-content: stretch;
 }
 
 .subplot-card {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
   border: 1px solid rgba(58, 43, 27, 0.14);
   border-radius: 18px;
   background: rgba(255, 250, 242, 0.82);
@@ -427,8 +458,10 @@ dd {
 
 .subplot-plot {
   width: 100%;
+  max-width: 100%;
   min-width: 0;
-  min-height: 340px;
+  min-height: 0;
+  flex: 1 1 auto;
   padding: 4px 6px 8px;
   overflow: hidden;
 }
@@ -438,6 +471,7 @@ dd {
 .subplot-plot .svg-container {
   width: 100% !important;
   max-width: 100%;
+  height: 100%;
 }
 
 .plot-empty-state {
@@ -451,18 +485,6 @@ dd {
   color: var(--muted);
   background: rgba(255, 252, 246, 0.72);
   text-align: center;
-}
-
-@media (max-width: 1680px) {
-  .plot-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 1280px) {
-  .plot-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 1080px) {
@@ -514,7 +536,7 @@ dd {
   }
 
   .plot-grid {
-    grid-template-columns: 1fr;
+    min-height: auto;
   }
 
   .subplot-plot {

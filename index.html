@@ -61,6 +61,18 @@
         </section>
 
         <section class="card">
+          <h2>Plot mode</h2>
+          <div id="plot-mode-toggle" class="toggle-group" role="group" aria-label="Plot mode">
+            <button class="toggle-button is-active" type="button" data-plot-mode="single">
+              single
+            </button>
+            <button class="toggle-button" type="button" data-plot-mode="multi">
+              multi
+            </button>
+          </div>
+        </section>
+
+        <section class="card">
           <h2>Projection filters</h2>
           <div class="field-grid">
             <label id="spin-channel-wrap">
@@ -129,13 +141,6 @@
           <label class="checkbox-row">
             <input id="marker-outline" type="checkbox" />
             <span>White marker outline</span>
-          </label>
-          <label>
-            <span class="field-label">Plot mode</span>
-            <select id="plot-mode">
-              <option value="single">single</option>
-              <option value="multi">multi</option>
-            </select>
           </label>
           <label>
             <span class="field-label">Plot theme</span>

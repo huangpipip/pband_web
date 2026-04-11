@@ -835,7 +835,6 @@
     const weights = [];
     const bandIndices = [];
     const kIndices = [];
-    let maxAbs = 0;
 
     if (!weightMatrix.length) {
       return null;
@@ -854,20 +853,15 @@
         x.push(xValues[kIndex]);
         y.push(energy);
         weights.push(weight);
+        sizes.push(Math.sqrt(absWeight) * selection.markerScale);
         bandIndices.push(bandIndex + 1);
         kIndices.push(kIndex + 1);
-        maxAbs = Math.max(maxAbs, absWeight);
       });
     });
 
     if (!weights.length) {
       return null;
     }
-
-    weights.forEach((weight) => {
-      const relative = maxAbs > 0 ? Math.abs(weight) / maxAbs : 0;
-      sizes.push(4 + Math.sqrt(relative) * selection.markerScale);
-    });
 
     const trace = {
       type: "scattergl",

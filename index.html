@@ -171,6 +171,171 @@
             <span>Solid</span>
           </div>
         </section>
+
+        <section class="card">
+          <h2>Detail settings</h2>
+          <div class="detail-settings-body">
+            <section class="detail-settings-group">
+              <p class="detail-settings-group-title">Plot style</p>
+              <div class="field-grid">
+                <label>
+                  <span class="field-label">Image background color</span>
+                  <input id="plot-background-color" type="color" value="#f8f1e4" />
+                </label>
+                <label>
+                  <span class="field-label">Band line layer</span>
+                  <select id="band-line-layer">
+                    <option value="bottom">bottom</option>
+                    <option value="top">top</option>
+                  </select>
+                </label>
+              </div>
+              <div class="field-grid">
+                <label>
+                  <span class="field-label">Band line color mode</span>
+                  <select id="band-line-color-mode">
+                    <option value="theme">theme default</option>
+                    <option value="custom">custom color</option>
+                  </select>
+                </label>
+                <label>
+                  <span class="field-label">Band line color</span>
+                  <input id="band-line-color" type="color" value="#8f3625" />
+                </label>
+              </div>
+              <label>
+                <span class="field-label">Frame line width</span>
+                <input
+                  id="frame-line-width"
+                  type="range"
+                  min="0.5"
+                  max="4"
+                  step="0.1"
+                  value="1.3"
+                />
+              </label>
+              <div class="range-readout">
+                <span>Fine</span>
+                <span id="frame-line-width-value">1.3px</span>
+                <span>Bold</span>
+              </div>
+              <label>
+                <span class="field-label">Band line width</span>
+                <input
+                  id="band-line-width"
+                  type="range"
+                  min="0.5"
+                  max="4"
+                  step="0.1"
+                  value="1.2"
+                />
+              </label>
+              <div class="range-readout">
+                <span>Fine</span>
+                <span id="band-line-width-value">1.2px</span>
+                <span>Bold</span>
+              </div>
+            </section>
+
+            <section class="detail-settings-group">
+              <p class="detail-settings-group-title">Axis titles</p>
+              <div class="detail-settings-axis-grid">
+                <div class="detail-settings-axis-card">
+                  <div class="detail-settings-axis-header">
+                    <p class="detail-settings-axis-title">X axis</p>
+                    <label class="checkbox-row checkbox-row-compact">
+                      <input id="show-x-axis-title" type="checkbox" checked />
+                      <span>Show title</span>
+                    </label>
+                  </div>
+                  <label>
+                    <span class="field-label">Title content</span>
+                    <input id="x-axis-title" type="text" value="k-path distance" spellcheck="false" />
+                  </label>
+                  <label>
+                    <span class="field-label">Font size</span>
+                    <input id="x-axis-title-size" type="number" min="8" max="32" step="1" value="16" />
+                  </label>
+                </div>
+
+                <div class="detail-settings-axis-card">
+                  <div class="detail-settings-axis-header">
+                    <p class="detail-settings-axis-title">Y axis</p>
+                    <label class="checkbox-row checkbox-row-compact">
+                      <input id="show-y-axis-title" type="checkbox" checked />
+                      <span>Show title</span>
+                    </label>
+                  </div>
+                  <label>
+                    <span class="field-label">Title content</span>
+                    <input
+                      id="y-axis-title"
+                      type="text"
+                      value="Energy - E_F (eV)"
+                      spellcheck="false"
+                    />
+                  </label>
+                  <label>
+                    <span class="field-label">Font size</span>
+                    <input id="y-axis-title-size" type="number" min="8" max="32" step="1" value="16" />
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section class="detail-settings-group">
+              <p class="detail-settings-group-title">Grid lines</p>
+              <div class="detail-settings-single-grid">
+                <label>
+                  <span class="field-label">Grid line color</span>
+                  <input id="grid-line-color" type="color" value="#221c15" />
+                </label>
+              </div>
+              <label>
+                <span class="field-label">Grid line opacity</span>
+                <input id="grid-line-opacity" type="range" min="0" max="100" step="1" value="14" />
+              </label>
+              <div class="range-readout">
+                <span>Hidden</span>
+                <span id="grid-line-opacity-value">14%</span>
+                <span>Solid</span>
+              </div>
+            </section>
+
+            <section class="detail-settings-group">
+              <p class="detail-settings-group-title">Tick labels</p>
+              <div class="detail-settings-axis-grid">
+                <div class="detail-settings-axis-card">
+                  <div class="detail-settings-axis-header">
+                    <p class="detail-settings-axis-title">X axis</p>
+                    <label class="checkbox-row checkbox-row-compact">
+                      <input id="show-x-axis-labels" type="checkbox" checked />
+                      <span>Show labels</span>
+                    </label>
+                  </div>
+                  <label>
+                    <span class="field-label">Font size</span>
+                    <input id="x-axis-label-size" type="number" min="8" max="32" step="1" value="12" />
+                  </label>
+                </div>
+
+                <div class="detail-settings-axis-card">
+                  <div class="detail-settings-axis-header">
+                    <p class="detail-settings-axis-title">Y axis</p>
+                    <label class="checkbox-row checkbox-row-compact">
+                      <input id="show-y-axis-labels" type="checkbox" checked />
+                      <span>Show labels</span>
+                    </label>
+                  </div>
+                  <label>
+                    <span class="field-label">Font size</span>
+                    <input id="y-axis-label-size" type="number" min="8" max="32" step="1" value="12" />
+                  </label>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
       </aside>
 
       <main class="chart-panel">

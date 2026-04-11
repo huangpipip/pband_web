@@ -119,6 +119,27 @@
     markerOpacity: document.getElementById("marker-opacity"),
     markerOpacityValue: document.getElementById("marker-opacity-value"),
     markerOutline: document.getElementById("marker-outline"),
+    plotBackgroundColor: document.getElementById("plot-background-color"),
+    bandLineLayer: document.getElementById("band-line-layer"),
+    bandLineColorMode: document.getElementById("band-line-color-mode"),
+    bandLineColor: document.getElementById("band-line-color"),
+    frameLineWidth: document.getElementById("frame-line-width"),
+    frameLineWidthValue: document.getElementById("frame-line-width-value"),
+    bandLineWidth: document.getElementById("band-line-width"),
+    bandLineWidthValue: document.getElementById("band-line-width-value"),
+    showXAxisTitle: document.getElementById("show-x-axis-title"),
+    xAxisTitle: document.getElementById("x-axis-title"),
+    xAxisTitleSize: document.getElementById("x-axis-title-size"),
+    showYAxisTitle: document.getElementById("show-y-axis-title"),
+    yAxisTitle: document.getElementById("y-axis-title"),
+    yAxisTitleSize: document.getElementById("y-axis-title-size"),
+    gridLineColor: document.getElementById("grid-line-color"),
+    gridLineOpacity: document.getElementById("grid-line-opacity"),
+    gridLineOpacityValue: document.getElementById("grid-line-opacity-value"),
+    showXAxisLabels: document.getElementById("show-x-axis-labels"),
+    xAxisLabelSize: document.getElementById("x-axis-label-size"),
+    showYAxisLabels: document.getElementById("show-y-axis-labels"),
+    yAxisLabelSize: document.getElementById("y-axis-label-size"),
     plotModeToggle: document.getElementById("plot-mode-toggle"),
     plotTheme: document.getElementById("plot-theme"),
     spinChannel: document.getElementById("spin-channel"),
@@ -267,6 +288,74 @@
     return String(Object.is(rounded, -0) ? 0 : rounded);
   }
 
+  function defaultXAxisTitle() {
+    return "k-path distance";
+  }
+
+  function defaultYAxisTitle(alignToFermi) {
+    return alignToFermi ? "Energy - E_F (eV)" : "Energy (eV)";
+  }
+
+  function clampNumber(value, min, max, fallback) {
+    if (!Number.isFinite(value)) {
+      return fallback;
+    }
+    if (Number.isFinite(min)) {
+      value = Math.max(min, value);
+    }
+    if (Number.isFinite(max)) {
+      value = Math.min(max, value);
+    }
+    return value;
+  }
+
+  function detailFontSizeValue(input, fallback) {
+    return clampNumber(Number(input.value), 8, 32, fallback);
+  }
+
+  function detailOpacityValue(input, fallbackPercent) {
+    return clampNumber(Number(input.value), 0, 100, fallbackPercent) / 100;
+  }
+
+  function parseHexColor(hex) {
+    const match = /^#([0-9a-f]{6})$/i.exec(String(hex || "").trim());
+    if (!match) {
+      return null;
+    }
+    const value = match[1];
+    return {
+      r: parseInt(value.slice(0, 2), 16),
+      g: parseInt(value.slice(2, 4), 16),
+      b: parseInt(value.slice(4, 6), 16),
+    };
+  }
+
+  function rgbaColor(hex, opacity, fallback) {
+    const rgb = parseHexColor(hex);
+    if (!rgb) {
+      return fallback;
+    }
+    const alpha = clampNumber(opacity, 0, 1, 1);
+    return `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
+  }
+
+  function resolvedGridColor(selection, theme) {
+    return rgbaColor(selection.gridLineColor, selection.gridLineOpacity, theme.grid);
+  }
+
+  function syncBandLineColorInputState() {
+    const useCustomColor = elements.bandLineColorMode.value === "custom";
+    elements.bandLineColor.disabled = !useCustomColor;
+  }
+
+  function syncDefaultYAxisTitle(nextAlignToFermi) {
+    const currentTitle = elements.yAxisTitle.value;
+    const previousDefaultTitle = defaultYAxisTitle(state.lastAlignToFermi);
+    if (currentTitle === previousDefaultTitle) {
+      elements.yAxisTitle.value = defaultYAxisTitle(nextAlignToFermi);
+    }
+  }
+
   function syncEnergyWindowToAlignment(data, nextAlignToFermi) {
     if (!data) {
       state.lastAlignToFermi = nextAlignToFermi;
@@ -300,6 +389,28 @@
     elements.markerOpacity.value = "80";
     elements.markerOpacityValue.textContent = "80%";
     elements.markerOutline.checked = false;
+    elements.plotBackgroundColor.value = "#f8f1e4";
+    elements.bandLineLayer.value = "bottom";
+    elements.bandLineColorMode.value = "theme";
+    elements.bandLineColor.value = "#8f3625";
+    syncBandLineColorInputState();
+    elements.frameLineWidth.value = "1.3";
+    elements.frameLineWidthValue.textContent = "1.3px";
+    elements.bandLineWidth.value = "1.2";
+    elements.bandLineWidthValue.textContent = "1.2px";
+    elements.showXAxisTitle.checked = true;
+    elements.xAxisTitle.value = defaultXAxisTitle();
+    elements.xAxisTitleSize.value = "16";
+    elements.showYAxisTitle.checked = true;
+    elements.yAxisTitle.value = defaultYAxisTitle(true);
+    elements.yAxisTitleSize.value = "16";
+    elements.gridLineColor.value = "#221c15";
+    elements.gridLineOpacity.value = "14";
+    elements.gridLineOpacityValue.textContent = "14%";
+    elements.showXAxisLabels.checked = true;
+    elements.xAxisLabelSize.value = "12";
+    elements.showYAxisLabels.checked = true;
+    elements.yAxisLabelSize.value = "12";
     setPlotMode("single");
     elements.plotTheme.value = "sandstone";
     elements.atomSelection.value = "";
@@ -665,6 +776,24 @@
       markerScale: Number(elements.markerScale.value),
       markerOpacity: Number(elements.markerOpacity.value) / 100,
       markerOutline: elements.markerOutline.checked,
+      plotBackgroundColor: elements.plotBackgroundColor.value,
+      bandLineLayer: elements.bandLineLayer.value === "top" ? "top" : "bottom",
+      bandLineColorMode: elements.bandLineColorMode.value === "custom" ? "custom" : "theme",
+      bandLineColor: elements.bandLineColor.value,
+      frameLineWidth: Number(elements.frameLineWidth.value),
+      bandLineWidth: Number(elements.bandLineWidth.value),
+      showXAxisTitle: elements.showXAxisTitle.checked,
+      xAxisTitle: elements.xAxisTitle.value,
+      xAxisTitleSize: detailFontSizeValue(elements.xAxisTitleSize, 16),
+      showYAxisTitle: elements.showYAxisTitle.checked,
+      yAxisTitle: elements.yAxisTitle.value,
+      yAxisTitleSize: detailFontSizeValue(elements.yAxisTitleSize, 16),
+      gridLineColor: elements.gridLineColor.value,
+      gridLineOpacity: detailOpacityValue(elements.gridLineOpacity, 14),
+      showXAxisLabels: elements.showXAxisLabels.checked,
+      xAxisLabelSize: detailFontSizeValue(elements.xAxisLabelSize, 12),
+      showYAxisLabels: elements.showYAxisLabels.checked,
+      yAxisLabelSize: detailFontSizeValue(elements.yAxisLabelSize, 12),
       plotMode: currentPlotMode(),
       plotTheme: elements.plotTheme.value,
       selectedElements,
@@ -739,6 +868,13 @@
     return [{ key: "total", label: "Bands", color: theme.bandColors.total }];
   }
 
+  function resolvedBandLineColor(selection, fallbackColor) {
+    if (selection.bandLineColorMode === "custom") {
+      return selection.bandLineColor;
+    }
+    return fallbackColor;
+  }
+
   function aggregateWeights(projectionMatrix, atomIndices, orbitalIndices) {
     if (!projectionMatrix.length || !atomIndices.length || !orbitalIndices.length) {
       return [];
@@ -788,6 +924,7 @@
   }
 
   function buildLineTrace(xValues, bandEntries, segments, energyShift, descriptor) {
+    const lineWidth = Number.isFinite(descriptor.width) ? descriptor.width : 1.2;
     const x = [];
     const y = [];
     const bandCount = bandEntries[0] ? bandEntries[0].length : 0;
@@ -811,7 +948,7 @@
       name: descriptor.label,
       line: {
         color: descriptor.color,
-        width: 1.2,
+        width: lineWidth,
       },
       hoverinfo: "skip",
       showlegend: false,
@@ -942,7 +1079,7 @@
 
     return horizontalLineShape(data.fermiEnergy, theme, {
       color: theme.fermiLine,
-      width: 1.6,
+      width: selection.frameLineWidth,
       dash: "dash",
     });
   }
@@ -972,12 +1109,13 @@
       },
       bgcolor: theme.fermiLabelBg,
       bordercolor: theme.fermiLabelBorder,
-      borderwidth: 1,
+      borderwidth: selection.frameLineWidth,
       borderpad: compact ? 2 : 3,
     };
   }
 
-  function boundaryShapes(data, energyMin, energyMax, theme) {
+  function boundaryShapes(data, energyMin, energyMax, theme, selection) {
+    const gridColor = resolvedGridColor(selection, theme);
     return data.boundaryPositions.map((position) => ({
       type: "line",
       x0: position,
@@ -985,8 +1123,8 @@
       y0: energyMin,
       y1: energyMax,
       line: {
-        color: theme.boundary,
-        width: 1,
+        color: gridColor,
+        width: selection.frameLineWidth,
         dash: "dot",
       },
     }));
@@ -994,7 +1132,7 @@
 
   function plotShapes(data, selection, energyMin, energyMax, theme) {
     const yAxisDensity = denseYAxisConfig(selection, energyMin);
-    const shapes = [...boundaryShapes(data, energyMin, energyMax, theme)];
+    const shapes = [...boundaryShapes(data, energyMin, energyMax, theme, selection)];
     const fermiShape = fermiLevelShape(data, selection, energyMin, energyMax, theme);
     if (fermiShape) {
       shapes.push(fermiShape);
@@ -1181,6 +1319,21 @@
     return data.mode === "soc" ? "Projected band structure with SOC" : "Projected band structure";
   }
 
+  function defaultXRange(data) {
+    const values = Array.isArray(data.kpointDistances)
+      ? data.kpointDistances.filter((value) => Number.isFinite(value))
+      : [];
+    if (!values.length) {
+      return [0, 1];
+    }
+    const min = values[0];
+    const max = values[values.length - 1];
+    if (max > min) {
+      return [min, max];
+    }
+    return [min - 0.5, max + 0.5];
+  }
+
   function buildSelectionSummaryText(data, selection) {
     const summary = summarizeSelection(data, selection);
     return selection.plotMode === "multi" ? `${summary} • multi-view` : summary;
@@ -1188,10 +1341,13 @@
 
   function buildPlotLayout(data, selection, theme, energyMin, energyMax, compact) {
     const decorations = plotShapes(data, selection, energyMin, energyMax, theme);
+    const gridColor = resolvedGridColor(selection, theme);
+    const xAxisTitle = compact || !selection.showXAxisTitle ? "" : selection.xAxisTitle;
+    const yAxisTitle = compact || !selection.showYAxisTitle ? "" : selection.yAxisTitle;
     const layout = {
       uirevision: `plot-${state.plotUiRevision}`,
-      paper_bgcolor: "rgba(0,0,0,0)",
-      plot_bgcolor: theme.plotBg,
+      paper_bgcolor: selection.plotBackgroundColor,
+      plot_bgcolor: selection.plotBackgroundColor,
       margin: compact
         ? {
             l: 62,
@@ -1211,38 +1367,46 @@
         color: theme.font,
       },
       xaxis: {
-        title: compact ? "" : "k-path distance",
+        title: xAxisTitle,
         zeroline: false,
         showgrid: false,
         showline: true,
+        mirror: true,
         linecolor: theme.axis,
-        linewidth: 1.3,
+        linewidth: selection.frameLineWidth,
         ticks: "outside",
         tickcolor: theme.tickLine,
+        showticklabels: selection.showXAxisLabels,
         tickfont: {
           color: theme.tick,
+          size: selection.xAxisLabelSize,
         },
         titlefont: {
           color: theme.font,
+          size: selection.xAxisTitleSize,
         },
       },
       yaxis: {
-        title: compact ? "" : selection.alignToFermi ? "Energy - E_F (eV)" : "Energy (eV)",
+        title: yAxisTitle,
         zeroline: selection.alignToFermi,
         zerolinecolor: theme.zero,
-        zerolinewidth: 1.3,
-        gridcolor: theme.grid,
-        gridwidth: 1,
+        zerolinewidth: selection.frameLineWidth,
+        gridcolor: gridColor,
+        gridwidth: selection.frameLineWidth,
         showline: true,
+        mirror: true,
         linecolor: theme.axis,
-        linewidth: 1.3,
+        linewidth: selection.frameLineWidth,
         ticks: "outside",
         tickcolor: theme.tickLine,
+        showticklabels: selection.showYAxisLabels,
         tickfont: {
           color: theme.tick,
+          size: selection.yAxisLabelSize,
         },
         titlefont: {
           color: theme.font,
+          size: selection.yAxisTitleSize,
         },
       },
       shapes: decorations.shapes,
@@ -1283,11 +1447,7 @@
     }
 
     const xRange = copyRange(state.sharedPlotRanges.x);
-    if (xRange) {
-      layout.xaxis.range = xRange;
-    } else {
-      layout.xaxis.autorange = true;
-    }
+    layout.xaxis.range = xRange || defaultXRange(data);
 
     const yRange = copyRange(state.sharedPlotRanges.y);
     layout.yaxis.range = yRange || [energyMin, energyMax];
@@ -1314,7 +1474,11 @@
       }
 
       lineTraces.push(
-        buildLineTrace(data.kpointDistances, bandEntries, data.segments, energyShift, descriptor),
+        buildLineTrace(data.kpointDistances, bandEntries, data.segments, energyShift, {
+          ...descriptor,
+          color: resolvedBandLineColor(selection, descriptor.color),
+          width: selection.bandLineWidth,
+        }),
       );
 
       if (!data.hasProjection) {
@@ -1356,16 +1520,30 @@
     });
 
     return {
+      bandLineLayer: selection.bandLineLayer,
       lineTraces,
       orbitalPlots,
     };
   }
 
   function singlePlotTraces(model) {
+    const markerTraces = model.orbitalPlots.flatMap((orbitalPlot) => orbitalPlot.markerTraces);
+    if (model.bandLineLayer === "top") {
+      return [...markerTraces, ...model.lineTraces];
+    }
     return [
       ...model.lineTraces,
-      ...model.orbitalPlots.flatMap((orbitalPlot) => orbitalPlot.markerTraces),
+      ...markerTraces,
     ];
+  }
+
+  function subplotTraces(model, orbitalPlot) {
+    const markerTraces = orbitalPlot.markerTraces.map(cloneTrace);
+    const lineTraces = model.lineTraces.map(cloneTrace);
+    if (model.bandLineLayer === "top") {
+      return [...markerTraces, ...lineTraces];
+    }
+    return [...lineTraces, ...markerTraces];
   }
 
   function subplotMetaLabel(data, selection) {
@@ -1503,10 +1681,7 @@
       state.plotNodes.push(plotNode);
       plotEntries.push({
         plotNode,
-        traces: [
-          ...model.lineTraces.map(cloneTrace),
-          ...orbitalPlot.markerTraces.map(cloneTrace),
-        ],
+        traces: subplotTraces(model, orbitalPlot),
       });
     });
 
@@ -1607,13 +1782,16 @@
     );
 
     elements.alignFermi.addEventListener("input", () => {
-      syncEnergyWindowToAlignment(state.data, elements.alignFermi.checked);
+      const nextAlignToFermi = elements.alignFermi.checked;
+      syncDefaultYAxisTitle(nextAlignToFermi);
+      syncEnergyWindowToAlignment(state.data, nextAlignToFermi);
       invalidatePlotView();
       renderPlot();
     });
 
     [
       elements.markerOutline,
+      elements.bandLineLayer,
       elements.plotTheme,
       elements.spinChannel,
       elements.socComponent,
@@ -1649,6 +1827,43 @@
       renderPlot();
     });
 
+    elements.plotBackgroundColor.addEventListener("input", renderPlot);
+    elements.bandLineColor.addEventListener("input", renderPlot);
+
+    elements.bandLineColorMode.addEventListener("input", () => {
+      syncBandLineColorInputState();
+      renderPlot();
+    });
+
+    elements.frameLineWidth.addEventListener("input", () => {
+      elements.frameLineWidthValue.textContent = `${elements.frameLineWidth.value}px`;
+      renderPlot();
+    });
+
+    elements.bandLineWidth.addEventListener("input", () => {
+      elements.bandLineWidthValue.textContent = `${elements.bandLineWidth.value}px`;
+      renderPlot();
+    });
+
+    elements.gridLineOpacity.addEventListener("input", () => {
+      elements.gridLineOpacityValue.textContent = `${elements.gridLineOpacity.value}%`;
+      renderPlot();
+    });
+
+    [
+      elements.showXAxisTitle,
+      elements.xAxisTitle,
+      elements.xAxisTitleSize,
+      elements.showYAxisTitle,
+      elements.yAxisTitle,
+      elements.yAxisTitleSize,
+      elements.gridLineColor,
+      elements.showXAxisLabels,
+      elements.xAxisLabelSize,
+      elements.showYAxisLabels,
+      elements.yAxisLabelSize,
+    ].forEach((input) => input.addEventListener("input", renderPlot));
+
     window.addEventListener("resize", () => {
       if (!state.data || currentPlotMode() !== "multi") {
         return;
@@ -1663,6 +1878,7 @@
     });
 
     setPlotMode(currentPlotMode());
+    syncBandLineColorInputState();
     updateExportAvailability();
   }
 

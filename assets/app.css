@@ -86,7 +86,8 @@ code {
 
 .panel-header h1,
 .plot-toolbar h2,
-.card h2 {
+.card h2,
+.card-summary-title {
   margin: 0;
   font-family: Georgia, "Times New Roman", serif;
   letter-spacing: -0.02em;
@@ -162,6 +163,23 @@ dt {
 .card h2 {
   margin-bottom: 14px;
   font-size: 1.05rem;
+}
+
+.card-summary {
+  cursor: pointer;
+}
+
+.card-summary:focus-visible {
+  outline: 2px solid rgba(33, 95, 125, 0.45);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+.card-summary-title {
+  display: inline-block;
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 700;
 }
 
 .detail-settings-body {

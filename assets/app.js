@@ -154,7 +154,9 @@
     orbitalFilters: document.getElementById("orbital-filters"),
     selectionSummary: document.getElementById("selection-summary"),
     plotTitle: document.getElementById("plot-title"),
+    plotCard: document.getElementById("plot-card"),
     plotHost: document.getElementById("plot-host"),
+    plotResizeHandle: document.getElementById("plot-resize-handle"),
   };
 
   function setStatus(message, isError) {
@@ -1607,7 +1609,7 @@
         mirror: true,
         linecolor: frameColor,
         linewidth: selection.frameLineWidth,
-        ticks: "outside",
+        ticks: selection.showXAxisLabels ? "outside" : "",
         tickcolor: theme.tickLine,
         showticklabels: selection.showXAxisLabels,
         tickfont: {
@@ -1630,7 +1632,7 @@
         mirror: true,
         linecolor: frameColor,
         linewidth: selection.frameLineWidth,
-        ticks: "outside",
+        ticks: selection.showYAxisLabels ? "outside" : "",
         tickcolor: theme.tickLine,
         showticklabels: selection.showYAxisLabels,
         tickfont: {
@@ -1969,6 +1971,21 @@
     renderSinglePlot(data, selection, theme, energyMin, energyMax, model);
   }
 
+  function resizeRenderedPlots() {
+    if (!state.plotNodes.length) {
+      return;
+    }
+
+    const plotGrid = elements.plotHost.querySelector(".plot-grid");
+    if (plotGrid && currentPlotMode() === "multi") {
+      applyMultiPlotGridLayout(plotGrid, state.plotNodes.length);
+    }
+
+    state.plotNodes.forEach((plotNode) => {
+      Plotly.Plots.resize(plotNode).catch(() => null);
+    });
+  }
+
   function resetFilters() {
     if (!state.data) {
       return;
@@ -1980,6 +1997,42 @@
 
   function bindEvents() {
     let resizeFrameId = 0;
+    let plotResizeFrameId = 0;
+    let plotResizeDrag = null;
+
+    const scheduleRenderedPlotResize = () => {
+      if (plotResizeFrameId) {
+        return;
+      }
+      plotResizeFrameId = requestAnimationFrame(() => {
+        plotResizeFrameId = 0;
+        resizeRenderedPlots();
+      });
+    };
+
+    const handlePlotResizePointerMove = (event) => {
+      if (!plotResizeDrag) {
+        return;
+      }
+      const nextHeight = Math.max(
+        360,
+        Math.round(plotResizeDrag.startHeight + event.clientY - plotResizeDrag.startY),
+      );
+      elements.plotCard.style.setProperty("--plot-card-height", `${nextHeight}px`);
+      scheduleRenderedPlotResize();
+    };
+
+    const stopPlotResizeDrag = () => {
+      if (!plotResizeDrag) {
+        return;
+      }
+      plotResizeDrag = null;
+      document.body.classList.remove("is-resizing-plot");
+      window.removeEventListener("pointermove", handlePlotResizePointerMove);
+      window.removeEventListener("pointerup", stopPlotResizeDrag);
+      window.removeEventListener("pointercancel", stopPlotResizeDrag);
+      scheduleRenderedPlotResize();
+    };
 
     elements.fileInput.addEventListener("change", async (event) => {
       const [file] = event.target.files || [];
@@ -2054,6 +2107,22 @@
       renderPlot();
     });
 
+    elements.plotResizeHandle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || window.innerWidth <= 1080) {
+        return;
+      }
+
+      plotResizeDrag = {
+        startY: event.clientY,
+        startHeight: elements.plotCard.getBoundingClientRect().height,
+      };
+      document.body.classList.add("is-resizing-plot");
+      window.addEventListener("pointermove", handlePlotResizePointerMove);
+      window.addEventListener("pointerup", stopPlotResizeDrag);
+      window.addEventListener("pointercancel", stopPlotResizeDrag);
+      event.preventDefault();
+    });
+
     elements.markerScale.addEventListener("input", () => {
       elements.markerScaleValue.textContent = elements.markerScale.value;
       renderPlot();
@@ -2107,6 +2176,11 @@
     ].forEach((input) => input.addEventListener("input", renderPlot));
 
     window.addEventListener("resize", () => {
+      if (window.innerWidth <= 1080) {
+        elements.plotCard.style.removeProperty("--plot-card-height");
+      }
+      scheduleRenderedPlotResize();
+
       if (!state.data || currentPlotMode() !== "multi") {
         return;
       }

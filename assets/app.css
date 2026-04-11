@@ -38,6 +38,11 @@ body {
   padding: 24px;
 }
 
+body.is-resizing-plot {
+  cursor: ns-resize;
+  user-select: none;
+}
+
 button,
 input,
 select {
@@ -491,7 +496,8 @@ dd {
   box-shadow:
     0 22px 54px rgba(76, 48, 19, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  height: calc(100vh - 48px);
+  height: var(--plot-card-height, calc(100vh - 48px));
+  min-height: 360px;
   display: flex;
   flex-direction: column;
 }
@@ -528,6 +534,34 @@ dd {
   overflow: auto;
   background:
     linear-gradient(180deg, rgba(255, 252, 246, 0.86) 0%, rgba(245, 236, 221, 0.78) 100%);
+}
+
+.plot-card-resize-handle {
+  position: relative;
+  flex: 0 0 18px;
+  cursor: ns-resize;
+  touch-action: none;
+  border-top: 1px solid rgba(58, 43, 27, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 250, 242, 0.78) 0%, rgba(246, 237, 224, 0.92) 100%);
+}
+
+.plot-card-resize-handle::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 54px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(58, 43, 27, 0.24);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.52);
+}
+
+.plot-card-resize-handle:hover::before,
+.plot-card-resize-handle:active::before {
+  background: rgba(179, 71, 47, 0.42);
 }
 
 .plot-canvas {
@@ -629,6 +663,7 @@ dd {
 
   .plot-card {
     height: auto;
+    min-height: 0;
   }
 
   .plot-toolbar {
@@ -642,6 +677,10 @@ dd {
     text-align: left;
     white-space: normal;
     overflow: visible;
+  }
+
+  .plot-card-resize-handle {
+    display: none;
   }
 }
 

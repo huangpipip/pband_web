@@ -147,7 +147,7 @@
           </label>
           <label>
             <span class="field-label">Projection marker opacity</span>
-            <input id="marker-opacity" type="range" min="10" max="100" step="1" value="80" />
+            <input id="marker-opacity" type="range" min="0" max="100" step="1" value="80" />
           </label>
           <label>
             <span class="field-label">Projection marker skip</span>
@@ -363,6 +363,13 @@
             </p>
           </div>
           <div id="plot-host" class="plot-surface"></div>
+          <div
+            id="plot-resize-handle"
+            class="plot-card-resize-handle"
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize plot card"
+          ></div>
         </div>
       </main>
     </div>

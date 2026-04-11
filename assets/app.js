@@ -170,6 +170,8 @@
     return {
       components: Object.create(null),
       families: Object.create(null),
+      elementComponents: Object.create(null),
+      elementFamilies: Object.create(null),
     };
   }
 
@@ -188,8 +190,38 @@
     state.sharedPlotRanges = createEmptyPlotRanges();
   }
 
+  function isFamilyOrbitalMode(orbitalMode) {
+    return orbitalMode === "families" || orbitalMode === "element-families";
+  }
+
+  function isElementSeparatedOrbitalMode(orbitalMode) {
+    return orbitalMode === "element-components" || orbitalMode === "element-families";
+  }
+
+  function orbitalModeLabel(orbitalMode) {
+    if (orbitalMode === "families") {
+      return "families";
+    }
+    if (orbitalMode === "element-components") {
+      return "element components";
+    }
+    if (orbitalMode === "element-families") {
+      return "element families";
+    }
+    return "components";
+  }
+
   function orbitalColorScope(orbitalMode) {
-    return orbitalMode === "families" ? "families" : "components";
+    if (orbitalMode === "families") {
+      return "families";
+    }
+    if (orbitalMode === "element-components") {
+      return "elementComponents";
+    }
+    if (orbitalMode === "element-families") {
+      return "elementFamilies";
+    }
+    return "components";
   }
 
   function colorOverrideStore(orbitalMode) {
@@ -330,6 +362,28 @@
       g: parseInt(value.slice(2, 4), 16),
       b: parseInt(value.slice(4, 6), 16),
     };
+  }
+
+  function hexColor(red, green, blue) {
+    const channels = [red, green, blue].map((value) =>
+      clampNumber(Math.round(value), 0, 255, 0).toString(16).padStart(2, "0"),
+    );
+    return `#${channels.join("")}`;
+  }
+
+  function mixHexColors(baseHex, accentHex, weight, fallback) {
+    const base = parseHexColor(baseHex);
+    const accent = parseHexColor(accentHex);
+    if (!base || !accent) {
+      return fallback || baseHex || accentHex || "#7f7f7f";
+    }
+
+    const mixWeight = clampNumber(weight, 0, 1, 0.24);
+    return hexColor(
+      base.r * (1 - mixWeight) + accent.r * mixWeight,
+      base.g * (1 - mixWeight) + accent.g * mixWeight,
+      base.b * (1 - mixWeight) + accent.b * mixWeight,
+    );
   }
 
   function rgbaColor(hex, opacity, fallback) {
@@ -490,7 +544,12 @@
       input.type = "checkbox";
       input.checked = true;
       input.dataset.element = symbol;
-      input.addEventListener("change", renderPlot);
+      input.addEventListener("change", () => {
+        if (state.data && isElementSeparatedOrbitalMode(elements.orbitalMode.value)) {
+          populateOrbitalFilters(state.data);
+        }
+        renderPlot();
+      });
       label.appendChild(input);
       label.appendChild(document.createTextNode(symbol));
       elements.elementFilters.appendChild(label);
@@ -595,7 +654,57 @@
       }));
   }
 
+  function activeElementSymbols(data) {
+    const elementInputs = elements.elementFilters.querySelectorAll("input[data-element]");
+    if (!elementInputs.length) {
+      return [...data.elements];
+    }
+
+    const selected = new Set(checkedValues(elements.elementFilters, "element"));
+    return data.elements.filter((symbol) => selected.has(symbol));
+  }
+
+  function orbitalEntriesForMode(data, orbitalMode) {
+    const useFamilies = isFamilyOrbitalMode(orbitalMode);
+    const baseEntries = useFamilies
+      ? orderedOrbitalFamilies(data).map((family) => ({
+          label: family.label,
+          baseLabel: family.label,
+          indices: family.indices,
+          family: family.key,
+        }))
+      : orderedOrbitals(data).map((orbital) => ({
+          label: orbital.name,
+          baseLabel: orbital.name,
+          indices: [orbital.index],
+          family: orbitalFamily(orbital.name),
+        }));
+
+    if (!isElementSeparatedOrbitalMode(orbitalMode)) {
+      return baseEntries.map((entry) => ({
+        ...entry,
+        colorKey: entry.label,
+      }));
+    }
+
+    const selectedElements = activeElementSymbols(data);
+    return baseEntries.flatMap((entry) =>
+      selectedElements.map((symbol) => ({
+        ...entry,
+        label: `${symbol} ${entry.label}`,
+        colorKey: `${symbol} ${entry.label}`,
+        elementSymbol: symbol,
+        elementIndex: data.elements.indexOf(symbol),
+      })),
+    );
+  }
+
   function populateOrbitalFilters(data) {
+    const checkedSelectionKeys = new Set(
+      Array.from(elements.orbitalFilters.querySelectorAll("input[data-selection-color-key]:checked")).map(
+        (input) => input.dataset.selectionColorKey || input.dataset.selectionLabel || "orbital",
+      ),
+    );
     elements.orbitalFilters.innerHTML = "";
     if (!data.hasProjection) {
       elements.orbitalFilters.textContent = "No projected eigenvalues found in the file.";
@@ -603,21 +712,13 @@
       return;
     }
 
-    const useFamilies = elements.orbitalMode.value === "families";
-    const entries = useFamilies
-      ? orderedOrbitalFamilies(data).map((family) => ({
-          label: family.label,
-          indices: family.indices,
-          family: family.key,
-        }))
-      : orderedOrbitals(data).map((orbital) => ({
-          label: orbital.name,
-          indices: [orbital.index],
-          family: orbitalFamily(orbital.name),
-        }));
+    const orbitalMode = elements.orbitalMode.value;
+    const entries = orbitalEntriesForMode(data, orbitalMode);
 
     if (!entries.length) {
-      elements.orbitalFilters.textContent = "Projected data found, but orbital fields are empty.";
+      elements.orbitalFilters.textContent = isElementSeparatedOrbitalMode(orbitalMode)
+        ? "Select at least one element to build element-separated orbital filters."
+        : "Projected data found, but orbital fields are empty.";
       elements.orbitalFilters.classList.add("empty-state");
       return;
     }
@@ -630,11 +731,16 @@
       label.className = "pill-toggle";
       const input = document.createElement("input");
       input.type = "checkbox";
-      input.checked = false;
+      input.checked = checkedSelectionKeys.has(entry.colorKey);
       input.dataset.selectionLabel = entry.label;
+      input.dataset.selectionBaseLabel = entry.baseLabel;
       input.dataset.selectionIndices = entry.indices.join(",");
       input.dataset.selectionFamily = entry.family;
-      input.dataset.selectionColorKey = entry.label;
+      input.dataset.selectionColorKey = entry.colorKey;
+      if (entry.elementSymbol) {
+        input.dataset.selectionElement = entry.elementSymbol;
+        input.dataset.selectionElementIndex = String(entry.elementIndex);
+      }
       input.addEventListener("change", renderPlot);
 
       const colorButton = document.createElement("button");
@@ -650,14 +756,17 @@
 
       const entrySelection = {
         label: entry.label,
+        baseLabel: entry.baseLabel,
         family: entry.family,
-        colorKey: entry.label,
+        colorKey: entry.colorKey,
+        elementSymbol: entry.elementSymbol,
+        elementIndex: entry.elementIndex,
       };
       const syncColorUi = (color) => {
         colorButton.style.backgroundColor = color;
         colorInput.value = color;
       };
-      syncColorUi(colorForSelection(entrySelection, index, elements.orbitalMode.value));
+      syncColorUi(colorForSelection(entrySelection, index, orbitalMode));
 
       colorButton.addEventListener("click", (event) => {
         event.preventDefault();
@@ -666,7 +775,7 @@
       });
 
       const applyColorChange = () => {
-        colorOverrideStore(elements.orbitalMode.value)[entry.label] = colorInput.value;
+        colorOverrideStore(orbitalMode)[entry.colorKey] = colorInput.value;
         syncColorUi(colorInput.value);
         renderPlot();
       };
@@ -729,6 +838,21 @@
     return selected;
   }
 
+  function groupAtomIndicesByElement(data, atomIndices) {
+    const grouped = Object.create(null);
+    atomIndices.forEach((atomIndex) => {
+      const atom = data.atoms[atomIndex];
+      if (!atom) {
+        return;
+      }
+      if (!Array.isArray(grouped[atom.symbol])) {
+        grouped[atom.symbol] = [];
+      }
+      grouped[atom.symbol].push(atomIndex);
+    });
+    return grouped;
+  }
+
   function currentSelection(data) {
     const selectedElements = new Set(checkedValues(elements.elementFilters, "element"));
     const hasElementOptions = elements.elementFilters.querySelectorAll("input[data-element]").length > 0;
@@ -744,23 +868,37 @@
       }
       selectedAtoms.push(index);
     });
+    const atomIndicesByElement = groupAtomIndicesByElement(data, selectedAtoms);
 
     const selectedOrbitalInputs = Array.from(
       elements.orbitalFilters.querySelectorAll("input[data-selection-indices]:checked"),
     );
     const orbitalSelections = selectedOrbitalInputs
-      .map((input) => ({
-        indices: String(input.dataset.selectionIndices || "")
+      .map((input) => {
+        const elementSymbol = input.dataset.selectionElement || "";
+        const elementIndex = Number(input.dataset.selectionElementIndex);
+        return {
+          indices: String(input.dataset.selectionIndices || "")
           .split(",")
           .map((part) => Number(part))
           .filter((value) => Number.isInteger(value))
           .sort((a, b) => a - b),
         label: input.dataset.selectionLabel || "orbital",
+        baseLabel: input.dataset.selectionBaseLabel || input.dataset.selectionLabel || "orbital",
         colorKey: input.dataset.selectionColorKey || input.dataset.selectionLabel || "orbital",
         family: input.dataset.selectionFamily || "other",
-      }))
+        elementSymbol,
+        elementIndex: Number.isInteger(elementIndex) ? elementIndex : null,
+        atomIndices: elementSymbol ? [...(atomIndicesByElement[elementSymbol] || [])] : null,
+      };
+      })
       .filter((item) => item.indices.length > 0)
-      .sort((left, right) => left.indices[0] - right.indices[0]);
+      .sort((left, right) => {
+        if (left.indices[0] !== right.indices[0]) {
+          return left.indices[0] - right.indices[0];
+        }
+        return left.label.localeCompare(right.label);
+      });
     const orbitalLabels = orbitalSelections.map((entry) => entry.label);
     const orbitalIndices = Array.from(
       new Set(orbitalSelections.flatMap((entry) => entry.indices)),
@@ -840,7 +978,7 @@
         (selection.orbitalLabels.length > 5 ? " ..." : "")
       : "no orbitals";
     const mode = data.mode === "soc" ? selection.socComponent : selection.spinChannel;
-    return `${modeLabel(data.mode)} • ${atomLabel} • ${selection.orbitalMode} • ${orbitalLabel} • ${mode}`;
+    return `${modeLabel(data.mode)} • ${atomLabel} • ${orbitalModeLabel(selection.orbitalMode)} • ${orbitalLabel} • ${mode}`;
   }
 
   function buildChannelDescriptors(data, selection, theme) {
@@ -914,13 +1052,22 @@
   }
 
   function defaultColorForSelection(selectionItem, index) {
-    if (selectionItem.label) {
-      return colorForOrbital(selectionItem.label, index);
+    const baseLabel = selectionItem.baseLabel || selectionItem.label;
+    let color = baseLabel
+      ? colorForOrbital(baseLabel, index)
+      : selectionItem.family && selectionItem.family !== "other"
+        ? colorForOrbital(selectionItem.family, index)
+        : colorForOrbital("other", index);
+
+    if (selectionItem.elementSymbol) {
+      const accent =
+        MATPLOTLIB_HIGH_CONTRAST_PALETTE[
+          (selectionItem.elementIndex ?? index) % MATPLOTLIB_HIGH_CONTRAST_PALETTE.length
+        ];
+      color = mixHexColors(color, accent, 0.28, color);
     }
-    if (selectionItem.family && selectionItem.family !== "other") {
-      return colorForOrbital(selectionItem.family, index);
-    }
-    return colorForOrbital("other", index);
+
+    return color;
   }
 
   function colorForSelection(selectionItem, index, orbitalMode) {
@@ -1573,9 +1720,12 @@
 
       const projectionMatrix = channelProjectionMatrix(data, descriptor.key, selection.socComponent);
       orbitalPlots.forEach((orbitalPlot) => {
+        const atomIndices = Array.isArray(orbitalPlot.orbital.atomIndices)
+          ? orbitalPlot.orbital.atomIndices
+          : selection.atomIndices;
         const weights = aggregateWeights(
           projectionMatrix,
-          selection.atomIndices,
+          atomIndices,
           orbitalPlot.orbital.indices,
         );
         const baseLabel =

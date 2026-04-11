@@ -118,6 +118,8 @@
     markerScaleValue: document.getElementById("marker-scale-value"),
     markerOpacity: document.getElementById("marker-opacity"),
     markerOpacityValue: document.getElementById("marker-opacity-value"),
+    markerSkip: document.getElementById("marker-skip"),
+    markerSkipValue: document.getElementById("marker-skip-value"),
     markerOutline: document.getElementById("marker-outline"),
     plotBackgroundColor: document.getElementById("plot-background-color"),
     bandLineLayer: document.getElementById("band-line-layer"),
@@ -388,6 +390,8 @@
     elements.markerScaleValue.textContent = "18";
     elements.markerOpacity.value = "80";
     elements.markerOpacityValue.textContent = "80%";
+    elements.markerSkip.value = "0";
+    elements.markerSkipValue.textContent = "0%";
     elements.markerOutline.checked = false;
     elements.plotBackgroundColor.value = "#f8f1e4";
     elements.bandLineLayer.value = "bottom";
@@ -775,6 +779,7 @@
       alignToFermi: elements.alignFermi.checked,
       markerScale: Number(elements.markerScale.value),
       markerOpacity: Number(elements.markerOpacity.value) / 100,
+      markerSkipFraction: clampNumber(Number(elements.markerSkip.value), 0, 95, 0) / 100,
       markerOutline: elements.markerOutline.checked,
       plotBackgroundColor: elements.plotBackgroundColor.value,
       bandLineLayer: elements.bandLineLayer.value === "top" ? "top" : "bottom",
@@ -963,6 +968,7 @@
       xValues,
       bandEntries,
       weightMatrix,
+      segments,
       energyShift,
       selection,
     } = options;
@@ -977,24 +983,59 @@
       return null;
     }
 
-    weightMatrix.forEach((bandWeights, kIndex) => {
-      bandWeights.forEach((weight, bandIndex) => {
-        const energy = bandEntries[kIndex][bandIndex].energy - energyShift;
-        if (energy < selection.energyMin || energy > selection.energyMax) {
-          return;
+    const bandCount = bandEntries[0] ? bandEntries[0].length : 0;
+    const validSegments =
+      Array.isArray(segments) && segments.length
+        ? segments
+        : [{ start: 0, end: Math.max(weightMatrix.length - 1, 0) }];
+
+    for (let bandIndex = 0; bandIndex < bandCount; bandIndex += 1) {
+      validSegments.forEach((segment) => {
+        const bandPoints = [];
+        const start = Math.max(0, segment.start);
+        const end = Math.min(weightMatrix.length - 1, segment.end);
+
+        for (let kIndex = start; kIndex <= end; kIndex += 1) {
+          const bandWeights = weightMatrix[kIndex];
+          const bandEntry = bandEntries[kIndex];
+          if (!bandWeights || !bandEntry || !bandEntry[bandIndex]) {
+            continue;
+          }
+
+          const weight = bandWeights[bandIndex];
+          if (!Number.isFinite(weight)) {
+            continue;
+          }
+          const energy = bandEntry[bandIndex].energy - energyShift;
+          if (energy < selection.energyMin || energy > selection.energyMax) {
+            continue;
+          }
+
+          const absWeight = Math.abs(weight);
+          if (absWeight < 1e-6) {
+            continue;
+          }
+
+          bandPoints.push({
+            x: xValues[kIndex],
+            y: energy,
+            weight,
+            size: Math.sqrt(absWeight) * selection.markerScale,
+            bandIndex: bandIndex + 1,
+            kIndex: kIndex + 1,
+          });
         }
-        const absWeight = Math.abs(weight);
-        if (absWeight < 1e-6) {
-          return;
-        }
-        x.push(xValues[kIndex]);
-        y.push(energy);
-        weights.push(weight);
-        sizes.push(Math.sqrt(absWeight) * selection.markerScale);
-        bandIndices.push(bandIndex + 1);
-        kIndices.push(kIndex + 1);
+
+        selectMarkerPoints(bandPoints, selection.markerSkipFraction).forEach((point) => {
+          x.push(point.x);
+          y.push(point.y);
+          weights.push(point.weight);
+          sizes.push(point.size);
+          bandIndices.push(point.bandIndex);
+          kIndices.push(point.kIndex);
+        });
       });
-    });
+    }
 
     if (!weights.length) {
       return null;
@@ -1025,6 +1066,49 @@
     trace.marker.color = traceColor;
 
     return trace;
+  }
+
+  function sampledMarkerIndices(totalCount, keepCount) {
+    if (keepCount >= totalCount) {
+      return Array.from({ length: totalCount }, (_, index) => index);
+    }
+
+    if (keepCount <= 1) {
+      return [Math.floor((totalCount - 1) / 2)];
+    }
+
+    const indices = [];
+    const used = new Set();
+
+    for (let sampleIndex = 0; sampleIndex < keepCount; sampleIndex += 1) {
+      let pointIndex = Math.round((sampleIndex * (totalCount - 1)) / (keepCount - 1));
+      while (used.has(pointIndex) && pointIndex < totalCount - 1) {
+        pointIndex += 1;
+      }
+      while (used.has(pointIndex) && pointIndex > 0) {
+        pointIndex -= 1;
+      }
+      if (!used.has(pointIndex)) {
+        used.add(pointIndex);
+        indices.push(pointIndex);
+      }
+    }
+
+    return indices.sort((left, right) => left - right);
+  }
+
+  function selectMarkerPoints(points, markerSkipFraction) {
+    if (points.length <= 1 || markerSkipFraction <= 0) {
+      return points;
+    }
+
+    const keepRatio = 1 - markerSkipFraction;
+    const keepCount = Math.max(1, Math.round(points.length * keepRatio));
+    if (keepCount >= points.length) {
+      return points;
+    }
+
+    return sampledMarkerIndices(points.length, keepCount).map((index) => points[index]);
   }
 
   function roundToStep(value, step) {
@@ -1077,8 +1161,9 @@
       return null;
     }
 
+    const gridColor = resolvedGridColor(selection, theme);
     return horizontalLineShape(data.fermiEnergy, theme, {
-      color: theme.fermiLine,
+      color: gridColor,
       width: selection.frameLineWidth,
       dash: "dash",
     });
@@ -1342,6 +1427,7 @@
   function buildPlotLayout(data, selection, theme, energyMin, energyMax, compact) {
     const decorations = plotShapes(data, selection, energyMin, energyMax, theme);
     const gridColor = resolvedGridColor(selection, theme);
+    const frameColor = gridColor;
     const xAxisTitle = compact || !selection.showXAxisTitle ? "" : selection.xAxisTitle;
     const yAxisTitle = compact || !selection.showYAxisTitle ? "" : selection.yAxisTitle;
     const layout = {
@@ -1372,7 +1458,7 @@
         showgrid: false,
         showline: true,
         mirror: true,
-        linecolor: theme.axis,
+        linecolor: frameColor,
         linewidth: selection.frameLineWidth,
         ticks: "outside",
         tickcolor: theme.tickLine,
@@ -1389,13 +1475,13 @@
       yaxis: {
         title: yAxisTitle,
         zeroline: selection.alignToFermi,
-        zerolinecolor: theme.zero,
+        zerolinecolor: frameColor,
         zerolinewidth: selection.frameLineWidth,
         gridcolor: gridColor,
         gridwidth: selection.frameLineWidth,
         showline: true,
         mirror: true,
-        linecolor: theme.axis,
+        linecolor: frameColor,
         linewidth: selection.frameLineWidth,
         ticks: "outside",
         tickcolor: theme.tickLine,
@@ -1510,6 +1596,7 @@
           xValues: data.kpointDistances,
           bandEntries,
           weightMatrix: weights,
+          segments: data.segments,
           energyShift,
           selection: { ...selection, energyMin, energyMax },
         });
@@ -1824,6 +1911,11 @@
 
     elements.markerOpacity.addEventListener("input", () => {
       elements.markerOpacityValue.textContent = `${elements.markerOpacity.value}%`;
+      renderPlot();
+    });
+
+    elements.markerSkip.addEventListener("input", () => {
+      elements.markerSkipValue.textContent = `${elements.markerSkip.value}%`;
       renderPlot();
     });
 

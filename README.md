@@ -29,6 +29,7 @@ https://github.com/user-attachments/assets/f7b203cf-b6aa-42a5-ac52-6ab53da07563
 - 提供 `single` 与 `multi` 两种绘图模式，便于叠加查看或分面比较。
 - 自动识别 k-path 中的跳变并在图中分段显示。
 - 可选择是否对齐到费米能级，并可手动设置能量窗口。
+- 支持绘图时跳过前 `N` 个 k-point，便于杂化泛函等包含前置 SCF k 点的输出。
 - 可调节投影 marker 的大小、透明度、描边和颜色。
 - 内置多种绘图主题。
 - `single` 模式下可直接导出 PNG。
@@ -39,6 +40,7 @@ https://github.com/user-attachments/assets/f7b203cf-b6aa-42a5-ac52-6ab53da07563
 - Offers both `single` and `multi` plot modes for overlay or side-by-side comparison.
 - Detects k-path discontinuities and renders band segments accordingly.
 - Can align energies to the Fermi level or use absolute energies.
+- Can skip the first `N` k-points during plotting, which is useful for hybrid-functional outputs that include leading SCF k-points.
 - Lets you adjust marker size, opacity, outline, and per-orbital colors.
 - Includes multiple plot themes.
 - Exports PNG in `single` mode.

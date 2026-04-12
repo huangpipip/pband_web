@@ -114,6 +114,7 @@
     energyMin: document.getElementById("energy-min"),
     energyMax: document.getElementById("energy-max"),
     alignFermi: document.getElementById("align-fermi"),
+    kpointSkip: document.getElementById("kpoint-skip"),
     markerScale: document.getElementById("marker-scale"),
     markerScaleValue: document.getElementById("marker-scale-value"),
     markerOpacity: document.getElementById("marker-opacity"),
@@ -437,11 +438,15 @@
 
   function populateControls(data) {
     const windowRange = defaultWindow(data);
+    const maxKpointSkip = Math.max((data.summary.nkpoints || 0) - 1, 0);
     resetMarkerColorOverrides();
     elements.energyMin.value = windowRange.min;
     elements.energyMax.value = windowRange.max;
     elements.alignFermi.checked = true;
     state.lastAlignToFermi = true;
+    elements.kpointSkip.min = "0";
+    elements.kpointSkip.max = String(maxKpointSkip);
+    elements.kpointSkip.value = "0";
     elements.markerScale.value = "18";
     elements.markerScaleValue.textContent = "18";
     elements.markerOpacity.value = "80";
@@ -855,6 +860,11 @@
     return grouped;
   }
 
+  function sanitizeKpointSkipCount(value) {
+    const numeric = Math.floor(Number(value));
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+  }
+
   function currentSelection(data) {
     const selectedElements = new Set(checkedValues(elements.elementFilters, "element"));
     const hasElementOptions = elements.elementFilters.querySelectorAll("input[data-element]").length > 0;
@@ -917,6 +927,7 @@
       energyMin: Number(elements.energyMin.value),
       energyMax: Number(elements.energyMax.value),
       alignToFermi: elements.alignFermi.checked,
+      kpointSkipCount: sanitizeKpointSkipCount(elements.kpointSkip.value),
       markerScale: Number(elements.markerScale.value),
       markerOpacity: Number(elements.markerOpacity.value) / 100,
       markerSkipFraction: clampNumber(Number(elements.markerSkip.value), 0, 95, 0) / 100,
@@ -942,6 +953,71 @@
       plotMode: currentPlotMode(),
       plotTheme: elements.plotTheme.value,
       selectedElements,
+    };
+  }
+
+  function sliceKpointChannel(channel, startIndex) {
+    return Array.isArray(channel) ? channel.slice(startIndex) : [];
+  }
+
+  function sliceKpointChannels(channelMap, startIndex) {
+    const result = {};
+    Object.keys(channelMap || {}).forEach((key) => {
+      result[key] = sliceKpointChannel(channelMap[key], startIndex);
+    });
+    return result;
+  }
+
+  function visiblePlotData(data, skipCount) {
+    const safeSkip = sanitizeKpointSkipCount(skipCount);
+    const totalKpoints = Array.isArray(data.kpoints) ? data.kpoints.length : 0;
+    const originalKpointIndices = Array.from(
+      { length: Math.max(totalKpoints - safeSkip, 0) },
+      (_, index) => safeSkip + index,
+    );
+
+    if (safeSkip === 0) {
+      return {
+        ...data,
+        originalKpointIndices,
+        skippedKpoints: 0,
+        visibleKpointCount: totalKpoints,
+      };
+    }
+
+    if (safeSkip >= totalKpoints) {
+      return {
+        ...data,
+        kpoints: [],
+        kpointDistances: [],
+        segments: [],
+        boundaryPositions: [],
+        bands: sliceKpointChannels(data.bands, totalKpoints),
+        projections: sliceKpointChannels(data.projections, totalKpoints),
+        magnetization: data.magnetization
+          ? sliceKpointChannels(data.magnetization, totalKpoints)
+          : null,
+        originalKpointIndices: [],
+        skippedKpoints: safeSkip,
+        visibleKpointCount: 0,
+      };
+    }
+
+    const kpoints = data.kpoints.slice(safeSkip);
+    const kpath = window.VasprunParser.buildKpath(kpoints, data.basis);
+
+    return {
+      ...data,
+      kpoints,
+      kpointDistances: kpath.distances,
+      segments: kpath.segments,
+      boundaryPositions: kpath.boundaryPositions,
+      bands: sliceKpointChannels(data.bands, safeSkip),
+      projections: sliceKpointChannels(data.projections, safeSkip),
+      magnetization: data.magnetization ? sliceKpointChannels(data.magnetization, safeSkip) : null,
+      originalKpointIndices,
+      skippedKpoints: safeSkip,
+      visibleKpointCount: kpoints.length,
     };
   }
 
@@ -1120,6 +1196,7 @@
       segments,
       energyShift,
       selection,
+      originalKpointIndices,
     } = options;
     const x = [];
     const y = [];
@@ -1171,7 +1248,11 @@
             weight,
             size: Math.sqrt(absWeight) * selection.markerScale,
             bandIndex: bandIndex + 1,
-            kIndex: kIndex + 1,
+            kIndex:
+              Array.isArray(originalKpointIndices) &&
+              Number.isInteger(originalKpointIndices[kIndex])
+                ? originalKpointIndices[kIndex] + 1
+                : kIndex + 1,
           });
         }
 
@@ -1570,7 +1651,11 @@
 
   function buildSelectionSummaryText(data, selection) {
     const summary = summarizeSelection(data, selection);
-    return selection.plotMode === "multi" ? `${summary} • multi-view` : summary;
+    const kpointSummary =
+      selection.kpointSkipCount > 0
+        ? `${summary} • skip first ${selection.kpointSkipCount} k-points`
+        : summary;
+    return selection.plotMode === "multi" ? `${kpointSummary} • multi-view` : kpointSummary;
   }
 
   function buildPlotLayout(data, selection, theme, energyMin, energyMax, compact) {
@@ -1751,6 +1836,7 @@
           segments: data.segments,
           energyShift,
           selection: { ...selection, energyMin, energyMax },
+          originalKpointIndices: data.originalKpointIndices,
         });
         if (markerTrace) {
           orbitalPlot.markerTraces.push(markerTrace);
@@ -1952,6 +2038,7 @@
 
     const data = state.data;
     const selection = currentSelection(data);
+    const plotData = visiblePlotData(data, selection.kpointSkipCount);
     const theme = visualTheme(selection.plotTheme);
     let energyMin = selection.energyMin;
     let energyMax = selection.energyMax;
@@ -1962,13 +2049,22 @@
     elements.selectionSummary.textContent = buildSelectionSummaryText(data, selection);
     elements.plotTitle.textContent = buildPlotTitle(data, selection);
 
-    const model = buildPlotModel(data, selection, theme, energyMin, energyMax);
-    if (selection.plotMode === "multi") {
-      renderMultiPlotGrid(data, selection, theme, energyMin, energyMax, model);
+    if (!plotData.visibleKpointCount) {
+      renderPlotEmptyState(
+        selection.kpointSkipCount > 0
+          ? `K-point skip (${selection.kpointSkipCount}) removes all ${data.summary.nkpoints} available k-points.`
+          : "No k-points available for plotting.",
+      );
       return;
     }
 
-    renderSinglePlot(data, selection, theme, energyMin, energyMax, model);
+    const model = buildPlotModel(plotData, selection, theme, energyMin, energyMax);
+    if (selection.plotMode === "multi") {
+      renderMultiPlotGrid(plotData, selection, theme, energyMin, energyMax, model);
+      return;
+    }
+
+    renderSinglePlot(plotData, selection, theme, energyMin, energyMax, model);
   }
 
   function resizeRenderedPlots() {
@@ -2064,7 +2160,7 @@
       });
     });
 
-    [elements.energyMin, elements.energyMax].forEach((input) =>
+    [elements.energyMin, elements.energyMax, elements.kpointSkip].forEach((input) =>
       input.addEventListener("input", () => {
         invalidatePlotView();
         renderPlot();

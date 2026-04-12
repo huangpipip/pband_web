@@ -199,13 +199,7 @@
     return sorted[middle];
   }
 
-  function parseKpoints(doc, basis) {
-    const kpointNode = doc.querySelector('kpoints > varray[name="kpointlist"]');
-    if (!kpointNode) {
-      throw new Error("Unable to locate k-point path in vasprun.xml.");
-    }
-
-    const kpoints = toChildren(kpointNode, "v").map(parseNumericRow);
+  function buildKpath(kpoints, basis) {
     const reciprocal = basis ? reciprocalBasis(basis) : null;
     const stepNorms = [];
 
@@ -254,6 +248,16 @@
 
     const boundaryPositions = segments.slice(1).map((segment) => distances[segment.start]);
     return { kpoints, distances, segments, boundaryPositions };
+  }
+
+  function parseKpoints(doc, basis) {
+    const kpointNode = doc.querySelector('kpoints > varray[name="kpointlist"]');
+    if (!kpointNode) {
+      throw new Error("Unable to locate k-point path in vasprun.xml.");
+    }
+
+    const kpoints = toChildren(kpointNode, "v").map(parseNumericRow);
+    return buildKpath(kpoints, basis);
   }
 
   function parseFermiEnergy(doc) {
@@ -468,6 +472,7 @@
     return {
       atoms,
       elements,
+      basis,
       orbitalNames: projected.orbitalNames,
       orbitalGroups: projected.orbitalGroups,
       projections: projected.projections,
@@ -493,6 +498,7 @@
   }
 
   window.VasprunParser = {
+    buildKpath,
     parse,
   };
 })();

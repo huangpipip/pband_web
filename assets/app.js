@@ -277,6 +277,29 @@
     setStatus(`Loaded ${file.name}.`);
   }
 
+  async function loadSelectedFile(file) {
+    try {
+      await loadFile(file);
+    } catch (error) {
+      console.error(error);
+      state.data = null;
+      setUploadCardIdle(true);
+      updateExportAvailability();
+      renderInitialDropState();
+      setStatus(error.message || "Failed to parse vasprun.xml.", true);
+    }
+  }
+
+  function syncFileInputSelection(file) {
+    if (!file || typeof DataTransfer === "undefined") {
+      return;
+    }
+
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    elements.fileInput.files = transfer.files;
+  }
+
   function modeLabel(mode) {
     if (mode === "soc") {
       return "SOC / non-collinear";
@@ -1625,6 +1648,25 @@
     elements.plotHost.appendChild(empty);
   }
 
+  function renderInitialDropState() {
+    clearRenderedPlots();
+    elements.plotTitle.textContent = "Projected band structure";
+    elements.selectionSummary.textContent = "No data loaded.";
+
+    const empty = document.createElement("div");
+    empty.className = "plot-empty-state plot-drop-state";
+
+    const title = document.createElement("strong");
+    title.textContent = "Drop vasprun.xml here";
+
+    const copy = document.createElement("span");
+    copy.textContent = "or choose a file from the input panel.";
+
+    empty.appendChild(title);
+    empty.appendChild(copy);
+    elements.plotHost.appendChild(empty);
+  }
+
   function buildPlotTitle(data, selection) {
     if (selection.plotMode === "multi") {
       return data.mode === "soc"
@@ -2032,7 +2074,7 @@
   function renderPlot() {
     updateExportAvailability();
     if (!state.data) {
-      clearRenderedPlots();
+      renderInitialDropState();
       return;
     }
 
@@ -2095,6 +2137,7 @@
     let resizeFrameId = 0;
     let plotResizeFrameId = 0;
     let plotResizeDrag = null;
+    let plotFileDragDepth = 0;
 
     const scheduleRenderedPlotResize = () => {
       if (plotResizeFrameId) {
@@ -2130,22 +2173,72 @@
       scheduleRenderedPlotResize();
     };
 
+    const isFileDrag = (event) =>
+      Array.from(event.dataTransfer ? event.dataTransfer.types : []).includes("Files");
+
+    const setPlotFileDragActive = (isActive) => {
+      elements.plotCard.classList.toggle("is-file-drag-over", Boolean(isActive));
+    };
+
+    const stopPlotFileDrag = () => {
+      plotFileDragDepth = 0;
+      setPlotFileDragActive(false);
+    };
+
     elements.fileInput.addEventListener("change", async (event) => {
       const [file] = event.target.files || [];
       if (!file) {
         return;
       }
 
-      try {
-        await loadFile(file);
-      } catch (error) {
-        console.error(error);
-        state.data = null;
-        setUploadCardIdle(true);
-        updateExportAvailability();
-        setStatus(error.message || "Failed to parse vasprun.xml.", true);
+      await loadSelectedFile(file);
+    });
+
+    elements.plotCard.addEventListener("dragenter", (event) => {
+      if (!isFileDrag(event)) {
+        return;
+      }
+      plotFileDragDepth += 1;
+      setPlotFileDragActive(true);
+      event.preventDefault();
+    });
+
+    elements.plotCard.addEventListener("dragover", (event) => {
+      if (!isFileDrag(event)) {
+        return;
+      }
+      event.dataTransfer.dropEffect = "copy";
+      event.preventDefault();
+    });
+
+    elements.plotCard.addEventListener("dragleave", (event) => {
+      if (!isFileDrag(event)) {
+        return;
+      }
+      plotFileDragDepth = Math.max(0, plotFileDragDepth - 1);
+      if (!plotFileDragDepth) {
+        setPlotFileDragActive(false);
       }
     });
+
+    elements.plotCard.addEventListener("drop", async (event) => {
+      if (!isFileDrag(event)) {
+        return;
+      }
+      event.preventDefault();
+      stopPlotFileDrag();
+
+      const [file] = event.dataTransfer.files || [];
+      if (!file) {
+        setStatus("Drop a vasprun.xml file to load it.", true);
+        return;
+      }
+
+      syncFileInputSelection(file);
+      await loadSelectedFile(file);
+    });
+
+    window.addEventListener("dragend", stopPlotFileDrag);
 
     elements.resetButton.addEventListener("click", resetFilters);
     elements.exportButton.addEventListener("click", () => {
@@ -2292,6 +2385,7 @@
     setPlotMode(currentPlotMode());
     syncBandLineColorInputState();
     updateExportAvailability();
+    renderInitialDropState();
   }
 
   bindEvents();

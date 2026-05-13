@@ -1176,10 +1176,18 @@
     return override || defaultColorForSelection(selectionItem, index);
   }
 
-  function buildLineTrace(xValues, bandEntries, segments, energyShift, descriptor) {
+  function buildLineTrace(
+    xValues,
+    bandEntries,
+    segments,
+    energyShift,
+    descriptor,
+    originalKpointIndices,
+  ) {
     const lineWidth = Number.isFinite(descriptor.width) ? descriptor.width : 1.2;
     const x = [];
     const y = [];
+    const customdata = [];
     const bandCount = bandEntries[0] ? bandEntries[0].length : 0;
 
     for (let bandIndex = 0; bandIndex < bandCount; bandIndex += 1) {
@@ -1187,9 +1195,16 @@
         for (let kIndex = segment.start; kIndex <= segment.end; kIndex += 1) {
           x.push(xValues[kIndex]);
           y.push(bandEntries[kIndex][bandIndex].energy - energyShift);
+          customdata.push([
+            bandIndex + 1,
+            Array.isArray(originalKpointIndices) && Number.isInteger(originalKpointIndices[kIndex])
+              ? originalKpointIndices[kIndex] + 1
+              : kIndex + 1,
+          ]);
         }
         x.push(null);
         y.push(null);
+        customdata.push(null);
       });
     }
 
@@ -1203,7 +1218,12 @@
         color: descriptor.color,
         width: lineWidth,
       },
-      hoverinfo: "skip",
+      customdata,
+      hovertemplate:
+        "band %{customdata[0]}<br>" +
+        "k-point %{customdata[1]}<br>" +
+        "x %{x:.4f}<br>" +
+        "E %{y:.4f} eV<extra></extra>",
       showlegend: false,
     };
   }
@@ -1836,11 +1856,18 @@
       }
 
       lineTraces.push(
-        buildLineTrace(data.kpointDistances, bandEntries, data.segments, energyShift, {
-          ...descriptor,
-          color: resolvedBandLineColor(selection, descriptor.color),
-          width: selection.bandLineWidth,
-        }),
+        buildLineTrace(
+          data.kpointDistances,
+          bandEntries,
+          data.segments,
+          energyShift,
+          {
+            ...descriptor,
+            color: resolvedBandLineColor(selection, descriptor.color),
+            width: selection.bandLineWidth,
+          },
+          data.originalKpointIndices,
+        ),
       );
 
       if (!data.hasProjection) {

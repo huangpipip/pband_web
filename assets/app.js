@@ -7,7 +7,11 @@
     relayoutSyncInProgress: false,
     sharedPlotRanges: createEmptyPlotRanges(),
     lastAlignToFermi: true,
+    pendingPlotSettings: null,
+    isBatchExporting: false,
   };
+
+  const PLOT_SETTINGS_VERSION = 1;
 
   const MATPLOTLIB_HIGH_CONTRAST_PALETTE = [
     "#1f77b4",
@@ -109,7 +113,13 @@
     fileInput: document.getElementById("file-input"),
     resetButton: document.getElementById("reset-button"),
     exportButton: document.getElementById("export-button"),
+    exportSettingsButton: document.getElementById("export-settings-button"),
+    importSettingsButton: document.getElementById("import-settings-button"),
+    settingsFileInput: document.getElementById("settings-file-input"),
+    batchFileInput: document.getElementById("batch-file-input"),
+    batchExportButton: document.getElementById("batch-export-button"),
     statusLine: document.getElementById("status-line"),
+    presetStatusLine: document.getElementById("preset-status-line"),
     datasetSummary: document.getElementById("dataset-summary"),
     energyMin: document.getElementById("energy-min"),
     energyMax: document.getElementById("energy-max"),
@@ -163,6 +173,11 @@
   function setStatus(message, isError) {
     elements.statusLine.textContent = message;
     elements.statusLine.classList.toggle("error", Boolean(isError));
+  }
+
+  function setPresetStatus(message, isError) {
+    elements.presetStatusLine.textContent = message;
+    elements.presetStatusLine.classList.toggle("error", Boolean(isError));
   }
 
   function setUploadCardIdle(isIdle) {
@@ -262,6 +277,7 @@
   }
 
   async function loadFile(file) {
+    const reusableSettings = state.data ? capturePlotSettings() : state.pendingPlotSettings;
     setStatus(`Reading ${file.name} ...`);
     const xmlText = await file.text();
     await nextFrame();
@@ -272,6 +288,9 @@
     setUploadCardIdle(false);
     invalidatePlotView();
     populateControls(data);
+    if (reusableSettings) {
+      applyPlotSettings(reusableSettings, data);
+    }
     updateSummary(data);
     renderPlot();
     setStatus(`Loaded ${file.name}.`);
@@ -284,6 +303,7 @@
       console.error(error);
       state.data = null;
       setUploadCardIdle(true);
+      resetSummary();
       updateExportAvailability();
       renderInitialDropState();
       setStatus(error.message || "Failed to parse vasprun.xml.", true);
@@ -320,6 +340,13 @@
       data.fermiEnergy.toFixed(4),
     ];
 
+    Array.from(elements.datasetSummary.querySelectorAll("dd")).forEach((node, index) => {
+      node.textContent = values[index];
+    });
+  }
+
+  function resetSummary() {
+    const values = ["Not loaded", "-", "-", "-", "-", "-"];
     Array.from(elements.datasetSummary.querySelectorAll("dd")).forEach((node, index) => {
       node.textContent = values[index];
     });
@@ -886,6 +913,405 @@
   function sanitizeKpointSkipCount(value) {
     const numeric = Math.floor(Number(value));
     return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+  }
+
+  function cloneJsonValue(value, fallback) {
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (error) {
+      return fallback;
+    }
+  }
+
+  function selectedDatasetValues(container, datasetKey) {
+    const attrName = datasetAttributeName(datasetKey);
+    return Array.from(container.querySelectorAll(`input[data-${attrName}]:checked`)).map(
+      (input) => input.dataset[datasetKey],
+    );
+  }
+
+  function plotSettingsPayload(settings) {
+    return {
+      app: "pband_web",
+      version: PLOT_SETTINGS_VERSION,
+      createdAt: new Date().toISOString(),
+      settings,
+    };
+  }
+
+  function capturePlotSettings() {
+    const hasElementInputs = elements.elementFilters.querySelectorAll("input[data-element]").length > 0;
+    const hasOrbitalInputs =
+      elements.orbitalFilters.querySelectorAll("input[data-selection-color-key]").length > 0;
+    return {
+      version: PLOT_SETTINGS_VERSION,
+      plotMode: currentPlotMode(),
+      spinChannel: elements.spinChannel.value,
+      socComponent: elements.socComponent.value,
+      atomSelection: elements.atomSelection.value,
+      selectedElements: hasElementInputs
+        ? selectedDatasetValues(elements.elementFilters, "element")
+        : null,
+      orbitalMode: elements.orbitalMode.value,
+      selectedOrbitals: hasOrbitalInputs
+        ? selectedDatasetValues(elements.orbitalFilters, "selectionColorKey")
+        : null,
+      markerColorOverrides: cloneJsonValue(
+        state.markerColorOverrides,
+        createEmptyMarkerColorOverrides(),
+      ),
+      energyMin: elements.energyMin.value,
+      energyMax: elements.energyMax.value,
+      alignToFermi: elements.alignFermi.checked,
+      kpointSkipCount: elements.kpointSkip.value,
+      markerScale: elements.markerScale.value,
+      markerOpacity: elements.markerOpacity.value,
+      markerSkip: elements.markerSkip.value,
+      markerOutline: elements.markerOutline.checked,
+      plotTheme: elements.plotTheme.value,
+      plotBackgroundColor: elements.plotBackgroundColor.value,
+      bandLineLayer: elements.bandLineLayer.value,
+      bandLineColorMode: elements.bandLineColorMode.value,
+      bandLineColor: elements.bandLineColor.value,
+      frameLineWidth: elements.frameLineWidth.value,
+      bandLineWidth: elements.bandLineWidth.value,
+      showXAxisTitle: elements.showXAxisTitle.checked,
+      xAxisTitle: elements.xAxisTitle.value,
+      xAxisTitleSize: elements.xAxisTitleSize.value,
+      showYAxisTitle: elements.showYAxisTitle.checked,
+      yAxisTitle: elements.yAxisTitle.value,
+      yAxisTitleSize: elements.yAxisTitleSize.value,
+      gridLineColor: elements.gridLineColor.value,
+      gridLineOpacity: elements.gridLineOpacity.value,
+      showXAxisLabels: elements.showXAxisLabels.checked,
+      xAxisLabelSize: elements.xAxisLabelSize.value,
+      showYAxisLabels: elements.showYAxisLabels.checked,
+      yAxisLabelSize: elements.yAxisLabelSize.value,
+      plotRanges: cloneJsonValue(state.sharedPlotRanges, createEmptyPlotRanges()),
+    };
+  }
+
+  function currentReusablePlotSettings() {
+    const captured = capturePlotSettings();
+    if (state.data || !state.pendingPlotSettings) {
+      return captured;
+    }
+    return {
+      ...state.pendingPlotSettings,
+      ...captured,
+      selectedElements: state.pendingPlotSettings.selectedElements,
+      selectedOrbitals: state.pendingPlotSettings.selectedOrbitals,
+      markerColorOverrides: state.pendingPlotSettings.markerColorOverrides,
+      plotRanges: state.pendingPlotSettings.plotRanges,
+    };
+  }
+
+  function normalizePlotSettings(rawSettings) {
+    if (!rawSettings || typeof rawSettings !== "object") {
+      throw new Error("Settings file is not a valid JSON object.");
+    }
+    const settings = rawSettings.settings && typeof rawSettings.settings === "object"
+      ? rawSettings.settings
+      : rawSettings;
+    return {
+      ...settings,
+      markerColorOverrides: normalizeMarkerColorOverrides(settings.markerColorOverrides),
+      plotRanges: normalizePlotRanges(settings.plotRanges),
+    };
+  }
+
+  function normalizeMarkerColorOverrides(overrides) {
+    const empty = createEmptyMarkerColorOverrides();
+    if (!overrides || typeof overrides !== "object") {
+      return empty;
+    }
+    Object.keys(empty).forEach((scope) => {
+      if (!overrides[scope] || typeof overrides[scope] !== "object") {
+        return;
+      }
+      empty[scope] = { ...overrides[scope] };
+    });
+    return empty;
+  }
+
+  function normalizePlotRanges(ranges) {
+    const empty = createEmptyPlotRanges();
+    if (!ranges || typeof ranges !== "object") {
+      return empty;
+    }
+    ["x", "y"].forEach((axis) => {
+      const range = ranges[axis];
+      if (
+        Array.isArray(range) &&
+        range.length === 2 &&
+        range.every((value) => Number.isFinite(Number(value)))
+      ) {
+        empty[axis] = [Number(range[0]), Number(range[1])];
+      }
+    });
+    return empty;
+  }
+
+  function setSelectValue(select, value) {
+    if (value === undefined || value === null) {
+      return;
+    }
+    const nextValue = String(value);
+    if (Array.from(select.options).some((option) => option.value === nextValue)) {
+      select.value = nextValue;
+    }
+  }
+
+  function setInputValue(input, value) {
+    if (value === undefined || value === null) {
+      return;
+    }
+    input.value = String(value);
+  }
+
+  function setCheckedValue(input, value) {
+    if (value === undefined || value === null) {
+      return;
+    }
+    input.checked = Boolean(value);
+  }
+
+  function setCheckedDatasetValues(container, datasetKey, values) {
+    if (!Array.isArray(values)) {
+      return null;
+    }
+    const selected = new Set(values.map((value) => String(value)));
+    const attrName = datasetAttributeName(datasetKey);
+    let matchedCount = 0;
+    Array.from(container.querySelectorAll(`input[data-${attrName}]`)).forEach((input) => {
+      const isSelected = selected.has(input.dataset[datasetKey]);
+      input.checked = isSelected;
+      if (isSelected) {
+        matchedCount += 1;
+      }
+    });
+    return matchedCount;
+  }
+
+  function syncDetailReadouts() {
+    elements.markerScaleValue.textContent = elements.markerScale.value;
+    elements.markerOpacityValue.textContent = `${elements.markerOpacity.value}%`;
+    elements.markerSkipValue.textContent = `${elements.markerSkip.value}%`;
+    elements.frameLineWidthValue.textContent = `${elements.frameLineWidth.value}px`;
+    elements.bandLineWidthValue.textContent = `${elements.bandLineWidth.value}px`;
+    elements.gridLineOpacityValue.textContent = `${elements.gridLineOpacity.value}%`;
+    syncBandLineColorInputState();
+  }
+
+  function applyPlotSettings(rawSettings, data) {
+    const settings = normalizePlotSettings(rawSettings);
+
+    setPlotMode(settings.plotMode === "multi" ? "multi" : "single");
+    setSelectValue(elements.spinChannel, settings.spinChannel);
+    setSelectValue(elements.socComponent, settings.socComponent);
+    setInputValue(elements.atomSelection, settings.atomSelection);
+    setSelectValue(elements.orbitalMode, settings.orbitalMode);
+    setInputValue(elements.energyMin, settings.energyMin);
+    setInputValue(elements.energyMax, settings.energyMax);
+    setCheckedValue(elements.alignFermi, settings.alignToFermi);
+    setInputValue(elements.kpointSkip, settings.kpointSkipCount);
+    setInputValue(elements.markerScale, settings.markerScale);
+    setInputValue(elements.markerOpacity, settings.markerOpacity);
+    setInputValue(elements.markerSkip, settings.markerSkip);
+    setCheckedValue(elements.markerOutline, settings.markerOutline);
+    setSelectValue(elements.plotTheme, settings.plotTheme);
+    setInputValue(elements.plotBackgroundColor, settings.plotBackgroundColor);
+    setSelectValue(elements.bandLineLayer, settings.bandLineLayer);
+    setSelectValue(elements.bandLineColorMode, settings.bandLineColorMode);
+    setInputValue(elements.bandLineColor, settings.bandLineColor);
+    setInputValue(elements.frameLineWidth, settings.frameLineWidth);
+    setInputValue(elements.bandLineWidth, settings.bandLineWidth);
+    setCheckedValue(elements.showXAxisTitle, settings.showXAxisTitle);
+    setInputValue(elements.xAxisTitle, settings.xAxisTitle);
+    setInputValue(elements.xAxisTitleSize, settings.xAxisTitleSize);
+    setCheckedValue(elements.showYAxisTitle, settings.showYAxisTitle);
+    setInputValue(elements.yAxisTitle, settings.yAxisTitle);
+    setInputValue(elements.yAxisTitleSize, settings.yAxisTitleSize);
+    setInputValue(elements.gridLineColor, settings.gridLineColor);
+    setInputValue(elements.gridLineOpacity, settings.gridLineOpacity);
+    setCheckedValue(elements.showXAxisLabels, settings.showXAxisLabels);
+    setInputValue(elements.xAxisLabelSize, settings.xAxisLabelSize);
+    setCheckedValue(elements.showYAxisLabels, settings.showYAxisLabels);
+    setInputValue(elements.yAxisLabelSize, settings.yAxisLabelSize);
+
+    state.markerColorOverrides = normalizeMarkerColorOverrides(settings.markerColorOverrides);
+    state.sharedPlotRanges = normalizePlotRanges(settings.plotRanges);
+    state.lastAlignToFermi = elements.alignFermi.checked;
+
+    if (data) {
+      const matchedElements = setCheckedDatasetValues(
+        elements.elementFilters,
+        "element",
+        settings.selectedElements,
+      );
+      if (matchedElements === 0 && settings.selectedElements && settings.selectedElements.length) {
+        Array.from(elements.elementFilters.querySelectorAll("input[data-element]")).forEach(
+          (input) => {
+            input.checked = true;
+          },
+        );
+      }
+      populateOrbitalFilters(data);
+      setCheckedDatasetValues(
+        elements.orbitalFilters,
+        "selectionColorKey",
+        settings.selectedOrbitals,
+      );
+    }
+
+    syncDetailReadouts();
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function downloadDataUrl(dataUrl, filename) {
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  function safeFilenamePart(value, fallback) {
+    const cleaned = String(value || "")
+      .replace(/\.(vasprun|xml)$/i, "")
+      .replace(/[^a-z0-9._-]+/gi, "-")
+      .replace(/^-+|-+$/g, "");
+    return cleaned || fallback;
+  }
+
+  function exportCurrentPlotSettings() {
+    const payload = plotSettingsPayload(currentReusablePlotSettings());
+    const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], {
+      type: "application/json",
+    });
+    const datePart = new Date().toISOString().slice(0, 10);
+    downloadBlob(blob, `pband-plot-settings-${datePart}.json`);
+    setPresetStatus("Exported current plot settings.");
+  }
+
+  async function importPlotSettingsFile(file) {
+    try {
+      const raw = JSON.parse(await file.text());
+      const settings = normalizePlotSettings(raw);
+      state.pendingPlotSettings = settings;
+      if (state.data) {
+        invalidatePlotView();
+      }
+      applyPlotSettings(settings, state.data);
+      if (state.data) {
+        renderPlot();
+      }
+      setPresetStatus("Imported settings. New files will reuse them.");
+    } catch (error) {
+      console.error(error);
+      setPresetStatus(error.message || "Failed to import plot settings.", true);
+    }
+  }
+
+  async function exportVisibleSinglePlot(filename) {
+    const plotNode = state.plotNodes[0];
+    if (!plotNode || currentPlotMode() !== "single") {
+      throw new Error("PNG export requires single plot mode.");
+    }
+    const dataUrl = await Plotly.toImage(plotNode, {
+      format: "png",
+      scale: 2,
+    });
+    downloadDataUrl(dataUrl, filename);
+  }
+
+  async function restoreBatchSource(originalData, originalSettings) {
+    clearRenderedPlots();
+    state.data = originalData;
+    if (!originalData) {
+      setUploadCardIdle(true);
+      resetSummary();
+      renderInitialDropState();
+      return;
+    }
+
+    populateControls(originalData);
+    applyPlotSettings(originalSettings, originalData);
+    updateSummary(originalData);
+    setUploadCardIdle(false);
+    await renderPlot();
+  }
+
+  async function batchExportPng() {
+    const files = Array.from(elements.batchFileInput.files || []);
+    if (!files.length) {
+      setPresetStatus("Choose one or more vasprun.xml files for batch export.", true);
+      return;
+    }
+    if (currentPlotMode() !== "single") {
+      setPresetStatus("Batch PNG export uses single plot mode.", true);
+      return;
+    }
+
+    const batchSettings = currentReusablePlotSettings();
+    const originalData = state.data;
+    const originalSettings = currentReusablePlotSettings();
+    const failures = [];
+    state.isBatchExporting = true;
+    updateExportAvailability();
+
+    try {
+      for (const [index, file] of files.entries()) {
+        const progress = `${index + 1}/${files.length}`;
+        try {
+          setPresetStatus(`Batch ${progress}: parsing ${file.name} ...`);
+          const xmlText = await file.text();
+          await nextFrame();
+          const data = window.VasprunParser.parse(xmlText);
+
+          state.data = data;
+          setUploadCardIdle(false);
+          invalidatePlotView();
+          populateControls(data);
+          applyPlotSettings(batchSettings, data);
+          updateSummary(data);
+          await renderPlot();
+          await nextFrame();
+
+          const baseName = safeFilenamePart(file.name, `vasprun-${index + 1}`);
+          const numberedName = `${String(index + 1).padStart(2, "0")}-${baseName}-pband.png`;
+          setPresetStatus(`Batch ${progress}: exporting ${numberedName} ...`);
+          await exportVisibleSinglePlot(numberedName);
+        } catch (error) {
+          console.error(error);
+          failures.push(`${file.name}: ${error.message || "failed"}`);
+        }
+      }
+    } finally {
+      state.isBatchExporting = false;
+      await restoreBatchSource(originalData, originalSettings);
+      updateExportAvailability();
+    }
+
+    if (failures.length) {
+      setPresetStatus(
+        `Batch finished with ${failures.length} failed file(s): ${failures.join("; ")}`,
+        true,
+      );
+      return;
+    }
+    setPresetStatus(`Batch exported ${files.length} PNG file(s).`);
   }
 
   function currentSelection(data) {
@@ -1648,6 +2074,12 @@
       state.data && currentPlotMode() === "multi"
         ? "Switch to single plot mode to export PNG."
         : "";
+    elements.exportSettingsButton.disabled = state.isBatchExporting;
+    const hasBatchFiles = (elements.batchFileInput.files || []).length > 0;
+    elements.batchExportButton.disabled =
+      state.isBatchExporting || !hasBatchFiles || currentPlotMode() !== "single";
+    elements.batchExportButton.title =
+      currentPlotMode() === "multi" ? "Switch to single plot mode for batch PNG export." : "";
   }
 
   function clearRenderedPlots() {
@@ -2018,7 +2450,7 @@
     elements.plotHost.appendChild(plotNode);
     state.plotNodes = [plotNode];
 
-    Plotly.react(
+    return Plotly.react(
       plotNode,
       singlePlotTraces(model),
       buildPlotLayout(data, selection, theme, energyMin, energyMax, false),
@@ -2033,12 +2465,12 @@
 
     if (!data.hasProjection) {
       renderPlotEmptyState("Multi-plot mode requires projected eigenvalues.");
-      return;
+      return Promise.resolve();
     }
 
     if (!selection.orbitalSelections.length) {
       renderPlotEmptyState("Select at least one orbital or family filter to compare in multi mode.");
-      return;
+      return Promise.resolve();
     }
 
     const grid = document.createElement("div");
@@ -2079,12 +2511,13 @@
       });
     });
 
-    requestAnimationFrame(() => {
+    return new Promise((resolve, reject) => requestAnimationFrame(() => {
       if (!grid.isConnected) {
+        resolve();
         return;
       }
 
-      plotEntries.forEach(({ plotNode, traces }) => {
+      Promise.all(plotEntries.map(({ plotNode, traces }) =>
         Plotly.react(
           plotNode,
           traces,
@@ -2092,17 +2525,17 @@
           plotConfig(),
         ).then(() => {
           attachMultiPlotListeners(plotNode);
-          Plotly.Plots.resize(plotNode).catch(() => null);
-        });
-      });
-    });
+          return Plotly.Plots.resize(plotNode).catch(() => null);
+        }),
+      )).then(() => resolve()).catch(reject);
+    }));
   }
 
   function renderPlot() {
     updateExportAvailability();
     if (!state.data) {
       renderInitialDropState();
-      return;
+      return Promise.resolve();
     }
 
     const data = state.data;
@@ -2124,16 +2557,15 @@
           ? `K-point skip (${selection.kpointSkipCount}) removes all ${data.summary.nkpoints} available k-points.`
           : "No k-points available for plotting.",
       );
-      return;
+      return Promise.resolve();
     }
 
     const model = buildPlotModel(plotData, selection, theme, energyMin, energyMax);
     if (selection.plotMode === "multi") {
-      renderMultiPlotGrid(plotData, selection, theme, energyMin, energyMax, model);
-      return;
+      return renderMultiPlotGrid(plotData, selection, theme, energyMin, energyMax, model);
     }
 
-    renderSinglePlot(plotData, selection, theme, energyMin, energyMax, model);
+    return renderSinglePlot(plotData, selection, theme, energyMin, energyMax, model);
   }
 
   function resizeRenderedPlots() {
@@ -2269,14 +2701,34 @@
 
     elements.resetButton.addEventListener("click", resetFilters);
     elements.exportButton.addEventListener("click", () => {
-      const plotNode = state.plotNodes[0];
-      if (!state.data || currentPlotMode() !== "single" || !plotNode) {
+      if (!state.data || currentPlotMode() !== "single") {
         return;
       }
-      Plotly.downloadImage(plotNode, {
-        format: "png",
-        filename: "projected-band-structure",
-        scale: 2,
+      exportVisibleSinglePlot("projected-band-structure.png").catch((error) => {
+        console.error(error);
+        setPresetStatus(error.message || "Failed to export PNG.", true);
+      });
+    });
+    elements.exportSettingsButton.addEventListener("click", exportCurrentPlotSettings);
+    elements.importSettingsButton.addEventListener("click", () => {
+      elements.settingsFileInput.click();
+    });
+    elements.settingsFileInput.addEventListener("change", async (event) => {
+      const [file] = event.target.files || [];
+      if (!file) {
+        return;
+      }
+      await importPlotSettingsFile(file);
+      elements.settingsFileInput.value = "";
+      updateExportAvailability();
+    });
+    elements.batchFileInput.addEventListener("change", updateExportAvailability);
+    elements.batchExportButton.addEventListener("click", () => {
+      batchExportPng().catch((error) => {
+        console.error(error);
+        state.isBatchExporting = false;
+        updateExportAvailability();
+        setPresetStatus(error.message || "Batch PNG export failed.", true);
       });
     });
 

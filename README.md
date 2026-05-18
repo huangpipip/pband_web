@@ -33,6 +33,7 @@ https://github.com/user-attachments/assets/f7b203cf-b6aa-42a5-ac52-6ab53da07563
 - 可调节投影 marker 的大小、透明度、描边和颜色。
 - 内置多种绘图主题。
 - `single` 模式下可直接导出 PNG。
+- 可导出/导入绘图设置 JSON，并用同一套设置批量导出多个 `vasprun.xml` 的 PNG。
 - 如果文件没有 projected eigenvalues，仍可查看能带线，但无法进行轨道投影比较。
 
 - Supports non-spin, collinear spin-polarized, and SOC / non-collinear `vasprun.xml` files.
@@ -44,6 +45,7 @@ https://github.com/user-attachments/assets/f7b203cf-b6aa-42a5-ac52-6ab53da07563
 - Lets you adjust marker size, opacity, outline, and per-orbital colors.
 - Includes multiple plot themes.
 - Exports PNG in `single` mode.
+- Exports/imports plot settings as JSON and batch-exports PNG files with the same settings.
 - If projected eigenvalues are absent, band lines can still be shown, but orbital comparison is unavailable.
 
 ## 快速开始 | Quick Start
@@ -59,14 +61,26 @@ Access online: https://pband.cquctcmp.com/
 3. 选择 `single` 或 `multi` 模式。
 4. 按元素、原子编号、轨道分量或轨道族筛选投影。
 5. 根据需要调整能量窗口、费米能级对齐、marker 样式和主题。
-6. 在 `single` 模式下导出 PNG。
+6. 在 `single` 模式下导出 PNG，或导出设置 JSON 以便复用。
 
 1. Load a `vasprun.xml` file.
 2. Inspect the dataset summary, including mode, k-points, bands, atoms, orbitals, and `E_F`.
 3. Choose `single` or `multi` plot mode.
 4. Filter projections by element, atom indices, orbital components, or orbital families.
 5. Adjust the energy window, Fermi alignment, marker styling, and theme as needed.
-6. Export PNG from `single` mode.
+6. Export PNG from `single` mode, or export a settings JSON for reuse.
+
+### 绘图设置复用与批量导出 | Reusing Settings and Batch Export
+
+1. 打开一个代表性的 `vasprun.xml`，调好能量窗口、筛选、颜色、主题、坐标轴和缩放范围。
+2. 点击 `Export settings` 保存当前绘图设置 JSON。
+3. 之后可点击 `Import settings` 将同一套参数套用到当前文件或下一次打开的文件。
+4. 需要批量图片时，保持 `single` 模式，在 `Batch input files` 中选择多个 `vasprun.xml`，点击 `Batch export PNG`。
+
+1. Load a representative `vasprun.xml` and tune the energy window, filters, colors, theme, axes, and zoom range.
+2. Click `Export settings` to save the current plot settings as JSON.
+3. Use `Import settings` later to apply the same parameters to the current file or the next loaded file.
+4. For batch images, stay in `single` mode, select multiple files in `Batch input files`, and click `Batch export PNG`.
 
 ## 支持的输入场景 | Supported Cases
 
@@ -106,11 +120,11 @@ node --check assets/vasprun-parser.js
 ## 注意事项 | Notes
 
 - 面向普通用户时，请直接使用在线部署地址：`https://pband.cquctcmp.com/`。
-- `multi` 模式用于比较不同轨道投影，但 PNG 导出仅支持 `single` 模式。
+- `multi` 模式用于比较不同轨道投影，但 PNG 与批量 PNG 导出仅支持 `single` 模式。
 - 建议使用现代桌面浏览器打开较大的 `vasprun.xml` 文件。
 
 - For normal end-user usage, access the deployed app directly at `https://pband.cquctcmp.com/`.
-- `multi` mode is intended for comparing orbital projections, while PNG export is currently limited to `single` mode.
+- `multi` mode is intended for comparing orbital projections, while PNG and batch PNG export are limited to `single` mode.
 - A modern desktop browser is recommended for large `vasprun.xml` files.
 
 ## 许可证 | License

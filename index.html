@@ -82,6 +82,27 @@
         </section>
 
         <section class="card">
+          <h2>Plot presets</h2>
+          <div class="preset-action-grid">
+            <button id="export-settings-button" type="button" disabled>
+              Export settings
+            </button>
+            <button id="import-settings-button" type="button">
+              Import settings
+            </button>
+          </div>
+          <input id="settings-file-input" class="hidden-file-input" type="file" accept=".json,application/json" />
+          <label>
+            <span class="field-label">Batch input files</span>
+            <input id="batch-file-input" type="file" accept=".xml,.vasprun" multiple />
+          </label>
+          <button id="batch-export-button" class="full-width-button" type="button" disabled>
+            Batch export PNG
+          </button>
+          <p id="preset-status-line" class="status-line">Export or import reusable plot settings.</p>
+        </section>
+
+        <section class="card">
           <h2>Projection filters</h2>
           <div class="field-grid">
             <label id="spin-channel-wrap">

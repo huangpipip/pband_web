@@ -104,44 +104,97 @@
 
         <section class="card">
           <h2>Projection filters</h2>
-          <div class="field-grid">
+          <div
+            id="projection-mode-toggle"
+            class="toggle-group projection-mode-tabs"
+            role="tablist"
+            aria-label="Projection filter type"
+          >
+            <button
+              id="projection-mode-orbital"
+              class="toggle-button is-active"
+              type="button"
+              data-projection-mode="orbital"
+              role="tab"
+              aria-controls="orbital-projection-panel"
+              aria-selected="true"
+            >
+              orbital
+            </button>
+            <button
+              id="projection-mode-spin"
+              class="toggle-button"
+              type="button"
+              data-projection-mode="spin"
+              role="tab"
+              aria-controls="spin-projection-panel"
+              aria-selected="false"
+            >
+              spin
+            </button>
+          </div>
+
+          <div
+            id="orbital-projection-panel"
+            class="projection-tab-panel"
+            role="tabpanel"
+            aria-labelledby="projection-mode-orbital"
+          >
             <label id="spin-channel-wrap">
               <span class="field-label">Spin display</span>
               <select id="spin-channel"></select>
             </label>
-            <label id="soc-component-wrap">
-              <span class="field-label">SOC component</span>
-              <select id="soc-component"></select>
+            <label>
+              <span class="field-label">Atom indices</span>
+              <input
+                id="atom-selection"
+                type="text"
+                placeholder="e.g. 1-4,8,10"
+                spellcheck="false"
+              />
             </label>
-          </div>
-          <label>
-            <span class="field-label">Atom indices</span>
-            <input
-              id="atom-selection"
-              type="text"
-              placeholder="e.g. 1-4,8,10"
-              spellcheck="false"
-            />
-          </label>
-          <div>
-            <p class="field-label">Elements</p>
-            <div id="element-filters" class="pill-grid empty-state">
-              Load a file to populate element filters.
+            <div>
+              <p class="field-label">Elements</p>
+              <div id="element-filters" class="pill-grid empty-state">
+                Load a file to populate element filters.
+              </div>
+            </div>
+            <div>
+              <p class="field-label">Orbitals</p>
+              <label>
+                <span class="field-label">Orbital view</span>
+                <select id="orbital-mode">
+                  <option value="components">components</option>
+                  <option value="families">families (s/p/d/f)</option>
+                  <option value="element-components">element components</option>
+                  <option value="element-families">element families (s/p/d/f)</option>
+                </select>
+              </label>
+              <div id="orbital-filters" class="pill-grid empty-state">
+                Load a file with projected eigenvalues.
+              </div>
             </div>
           </div>
-          <div>
-            <p class="field-label">Orbitals</p>
-            <label>
-              <span class="field-label">Orbital view</span>
-              <select id="orbital-mode">
-                <option value="components">components</option>
-                <option value="families">families (s/p/d/f)</option>
-                <option value="element-components">element components</option>
-                <option value="element-families">element families (s/p/d/f)</option>
-              </select>
+
+          <div
+            id="spin-projection-panel"
+            class="projection-tab-panel"
+            role="tabpanel"
+            aria-labelledby="projection-mode-spin"
+            hidden
+          >
+            <label id="soc-component-wrap">
+              <span class="field-label">Spin component</span>
+              <select id="soc-component"></select>
             </label>
-            <div id="orbital-filters" class="pill-grid empty-state">
-              Load a file with projected eigenvalues.
+            <p id="spin-projection-help" class="status-line">
+              Spin projection is available for SOC / non-collinear files with magnetization channels.
+            </p>
+            <div class="projection-tab-shared">
+              <p class="field-label">Projection scope</p>
+              <p class="projection-tab-note">
+                Spin projection uses all atoms and the projected tot field, or sums all orbital fields when tot is absent.
+              </p>
             </div>
           </div>
         </section>

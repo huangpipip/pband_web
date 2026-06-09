@@ -427,6 +427,33 @@ dd {
   box-shadow: 0 10px 24px rgba(143, 54, 37, 0.16);
 }
 
+.projection-mode-tabs {
+  margin-bottom: 14px;
+}
+
+.projection-tab-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.projection-tab-panel[hidden] {
+  display: none;
+}
+
+.projection-tab-shared {
+  padding: 12px;
+  border: 1px solid rgba(179, 71, 47, 0.12);
+  border-radius: 14px;
+  background: rgba(179, 71, 47, 0.05);
+}
+
+.projection-tab-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .pill-grid {
   display: flex;
   flex-wrap: wrap;

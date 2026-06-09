@@ -154,6 +154,10 @@
     showYAxisLabels: document.getElementById("show-y-axis-labels"),
     yAxisLabelSize: document.getElementById("y-axis-label-size"),
     plotModeToggle: document.getElementById("plot-mode-toggle"),
+    projectionModeToggle: document.getElementById("projection-mode-toggle"),
+    orbitalProjectionPanel: document.getElementById("orbital-projection-panel"),
+    spinProjectionPanel: document.getElementById("spin-projection-panel"),
+    spinProjectionHelp: document.getElementById("spin-projection-help"),
     plotTheme: document.getElementById("plot-theme"),
     spinChannel: document.getElementById("spin-channel"),
     socComponent: document.getElementById("soc-component"),
@@ -265,6 +269,50 @@
       button.classList.toggle("is-active", isActive);
       button.setAttribute("aria-pressed", isActive ? "true" : "false");
     });
+  }
+
+  function projectionModeButtons() {
+    return Array.from(elements.projectionModeToggle.querySelectorAll("[data-projection-mode]"));
+  }
+
+  function hasSpinProjectionData(data) {
+    return Boolean(data && data.mode === "soc" && data.hasMagnetization);
+  }
+
+  function currentProjectionMode() {
+    const activeButton = elements.projectionModeToggle.querySelector(
+      ".is-active[data-projection-mode]",
+    );
+    return activeButton ? activeButton.dataset.projectionMode : "orbital";
+  }
+
+  function setProjectionMode(mode) {
+    const nextMode = mode === "spin" ? "spin" : "orbital";
+    projectionModeButtons().forEach((button) => {
+      const isActive = button.dataset.projectionMode === nextMode;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+    elements.orbitalProjectionPanel.hidden = nextMode !== "orbital";
+    elements.spinProjectionPanel.hidden = nextMode !== "spin";
+  }
+
+  function syncProjectionModeAvailability(data) {
+    const spinButton = elements.projectionModeToggle.querySelector('[data-projection-mode="spin"]');
+    const canProjectSpin = hasSpinProjectionData(data);
+    if (spinButton) {
+      spinButton.disabled = Boolean(data) && !canProjectSpin;
+      spinButton.title =
+        data && !canProjectSpin
+          ? "Spin projection requires SOC / non-collinear magnetization channels."
+          : "";
+    }
+    if (data && !canProjectSpin && currentProjectionMode() === "spin") {
+      setProjectionMode("orbital");
+    }
+    elements.spinProjectionHelp.textContent = canProjectSpin
+      ? "Color shows the selected spin component directly. Marker size follows its absolute value."
+      : "Spin projection is available for SOC / non-collinear files with magnetization channels.";
   }
 
   function invalidatePlotView() {
@@ -527,11 +575,13 @@
     elements.showYAxisLabels.checked = true;
     elements.yAxisLabelSize.value = "12";
     setPlotMode("single");
+    setProjectionMode("orbital");
     elements.plotTheme.value = "sandstone";
     elements.atomSelection.value = "";
     elements.orbitalMode.value = "components";
 
     populateSpinControls(data);
+    syncProjectionModeAvailability(data);
     populateElementFilters(data);
     populateOrbitalFilters(data);
   }
@@ -560,15 +610,12 @@
       elements.spinWrap.hidden = true;
     }
 
-    if (data.mode === "soc") {
-      const componentOptions = [["total", "total projection"]];
-      if (data.hasMagnetization) {
-        componentOptions.push(
-          ["mx", "magnetization x"],
-          ["my", "magnetization y"],
-          ["mz", "magnetization z"],
-        );
-      }
+    if (data.mode === "soc" && data.hasMagnetization) {
+      const componentOptions = [
+        ["mz", "magnetization z"],
+        ["mx", "magnetization x"],
+        ["my", "magnetization y"],
+      ];
       componentOptions.forEach(([value, label]) => {
         const option = document.createElement("option");
         option.value = value;
@@ -579,7 +626,7 @@
     } else {
       const option = document.createElement("option");
       option.value = "total";
-      option.textContent = "not applicable";
+      option.textContent = "not available";
       elements.socComponent.appendChild(option);
       elements.socWrap.hidden = true;
     }
@@ -910,6 +957,42 @@
     return grouped;
   }
 
+  function totalOrbitalIndex(data) {
+    return data.orbitalNames.findIndex((name) => canonicalOrbitalName(name) === "tot");
+  }
+
+  function totalOrbitalSelection(data) {
+    const index = totalOrbitalIndex(data);
+    if (index >= 0) {
+      const label = data.orbitalNames[index] || "tot";
+      return {
+        indices: [index],
+        label,
+        baseLabel: label,
+        colorKey: label,
+        family: "tot",
+        elementSymbol: "",
+        elementIndex: null,
+        atomIndices: null,
+      };
+    }
+
+    if (!data.orbitalNames.length) {
+      return null;
+    }
+
+    return {
+      indices: data.orbitalNames.map((_, orbitalIndex) => orbitalIndex),
+      label: "total (all orbitals)",
+      baseLabel: "tot",
+      colorKey: "total (all orbitals)",
+      family: "tot",
+      elementSymbol: "",
+      elementIndex: null,
+      atomIndices: null,
+    };
+  }
+
   function sanitizeKpointSkipCount(value) {
     const numeric = Math.floor(Number(value));
     return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
@@ -946,6 +1029,7 @@
     return {
       version: PLOT_SETTINGS_VERSION,
       plotMode: currentPlotMode(),
+      projectionMode: currentProjectionMode(),
       spinChannel: elements.spinChannel.value,
       socComponent: elements.socComponent.value,
       atomSelection: elements.atomSelection.value,
@@ -1107,6 +1191,15 @@
     const settings = normalizePlotSettings(rawSettings);
 
     setPlotMode(settings.plotMode === "multi" ? "multi" : "single");
+    setProjectionMode(
+      settings.projectionMode === "spin" ||
+        (settings.projectionMode === undefined &&
+          (settings.socComponent === "mx" ||
+            settings.socComponent === "my" ||
+            settings.socComponent === "mz"))
+        ? "spin"
+        : "orbital",
+    );
     setSelectValue(elements.spinChannel, settings.spinChannel);
     setSelectValue(elements.socComponent, settings.socComponent);
     setInputValue(elements.atomSelection, settings.atomSelection);
@@ -1142,6 +1235,7 @@
     state.markerColorOverrides = normalizeMarkerColorOverrides(settings.markerColorOverrides);
     state.sharedPlotRanges = normalizePlotRanges(settings.plotRanges);
     state.lastAlignToFermi = elements.alignFermi.checked;
+    syncProjectionModeAvailability(data);
 
     if (data) {
       const matchedElements = setCheckedDatasetValues(
@@ -1315,6 +1409,7 @@
   }
 
   function currentSelection(data) {
+    const projectionMode = currentProjectionMode();
     const selectedElements = new Set(checkedValues(elements.elementFilters, "element"));
     const hasElementOptions = elements.elementFilters.querySelectorAll("input[data-element]").length > 0;
     const atomFilter = parseAtomSelection(elements.atomSelection.value, data.atoms.length);
@@ -1340,18 +1435,18 @@
         const elementIndex = Number(input.dataset.selectionElementIndex);
         return {
           indices: String(input.dataset.selectionIndices || "")
-          .split(",")
-          .map((part) => Number(part))
-          .filter((value) => Number.isInteger(value))
-          .sort((a, b) => a - b),
-        label: input.dataset.selectionLabel || "orbital",
-        baseLabel: input.dataset.selectionBaseLabel || input.dataset.selectionLabel || "orbital",
-        colorKey: input.dataset.selectionColorKey || input.dataset.selectionLabel || "orbital",
-        family: input.dataset.selectionFamily || "other",
-        elementSymbol,
-        elementIndex: Number.isInteger(elementIndex) ? elementIndex : null,
-        atomIndices: elementSymbol ? [...(atomIndicesByElement[elementSymbol] || [])] : null,
-      };
+            .split(",")
+            .map((part) => Number(part))
+            .filter((value) => Number.isInteger(value))
+            .sort((a, b) => a - b),
+          label: input.dataset.selectionLabel || "orbital",
+          baseLabel: input.dataset.selectionBaseLabel || input.dataset.selectionLabel || "orbital",
+          colorKey: input.dataset.selectionColorKey || input.dataset.selectionLabel || "orbital",
+          family: input.dataset.selectionFamily || "other",
+          elementSymbol,
+          elementIndex: Number.isInteger(elementIndex) ? elementIndex : null,
+          atomIndices: elementSymbol ? [...(atomIndicesByElement[elementSymbol] || [])] : null,
+        };
       })
       .filter((item) => item.indices.length > 0)
       .sort((left, right) => {
@@ -1364,15 +1459,32 @@
     const orbitalIndices = Array.from(
       new Set(orbitalSelections.flatMap((entry) => entry.indices)),
     ).sort((a, b) => a - b);
+    const spinOrbitalSelection = projectionMode === "spin" ? totalOrbitalSelection(data) : null;
+    const effectiveAtomIndices =
+      projectionMode === "spin" ? data.atoms.map((_, index) => index) : selectedAtoms;
+    const effectiveOrbitalSelections =
+      projectionMode === "spin"
+        ? spinOrbitalSelection
+          ? [spinOrbitalSelection]
+          : []
+        : orbitalSelections;
+    const effectiveOrbitalIndices =
+      projectionMode === "spin"
+        ? spinOrbitalSelection
+          ? [...spinOrbitalSelection.indices]
+          : []
+        : orbitalIndices;
+    const effectiveOrbitalLabels = effectiveOrbitalSelections.map((entry) => entry.label);
 
     return {
-      atomIndices: selectedAtoms,
-      orbitalIndices,
-      orbitalLabels,
-      orbitalSelections,
+      atomIndices: effectiveAtomIndices,
+      orbitalIndices: effectiveOrbitalIndices,
+      orbitalLabels: projectionMode === "spin" ? effectiveOrbitalLabels : orbitalLabels,
+      orbitalSelections: effectiveOrbitalSelections,
       orbitalMode: elements.orbitalMode.value,
+      projectionMode,
       spinChannel: elements.spinChannel.value,
-      socComponent: elements.socComponent.value,
+      socComponent: projectionMode === "spin" ? elements.socComponent.value : "total",
       energyMin: Number(elements.energyMin.value),
       energyMax: Number(elements.energyMax.value),
       alignToFermi: elements.alignFermi.checked,
@@ -1382,7 +1494,12 @@
       markerSkipFraction: clampNumber(Number(elements.markerSkip.value), 0, 95, 0) / 100,
       markerOutline: elements.markerOutline.checked,
       plotBackgroundColor: elements.plotBackgroundColor.value,
-      bandLineLayer: elements.bandLineLayer.value === "top" ? "top" : "bottom",
+      bandLineLayer:
+        projectionMode === "spin"
+          ? "top"
+          : elements.bandLineLayer.value === "top"
+            ? "top"
+            : "bottom",
       bandLineColorMode: elements.bandLineColorMode.value === "custom" ? "custom" : "theme",
       bandLineColor: elements.bandLineColor.value,
       frameLineWidth: Number(elements.frameLineWidth.value),
@@ -1401,7 +1518,7 @@
       yAxisLabelSize: detailFontSizeValue(elements.yAxisLabelSize, 12),
       plotMode: currentPlotMode(),
       plotTheme: elements.plotTheme.value,
-      selectedElements,
+      selectedElements: projectionMode === "spin" ? new Set(data.elements) : selectedElements,
     };
   }
 
@@ -1500,12 +1617,18 @@
     const atomLabel = selection.atomIndices.length
       ? `${selection.atomIndices.length} atoms`
       : "0 atoms";
+    if (selection.projectionMode === "spin") {
+      const orbitalLabel = selection.orbitalLabels.length ? selection.orbitalLabels[0] : "missing tot";
+      return `${modeLabel(data.mode)} • spin projection • all atoms • ${orbitalLabel} • ${selection.socComponent}`;
+    }
     const orbitalLabel = selection.orbitalLabels.length
       ? selection.orbitalLabels.slice(0, 5).join(" + ") +
         (selection.orbitalLabels.length > 5 ? " ..." : "")
       : "no orbitals";
     const mode = data.mode === "soc" ? selection.socComponent : selection.spinChannel;
-    return `${modeLabel(data.mode)} • ${atomLabel} • ${orbitalModeLabel(selection.orbitalMode)} • ${orbitalLabel} • ${mode}`;
+    const projectionLabel =
+      selection.projectionMode === "spin" ? "spin projection" : "orbital projection";
+    return `${modeLabel(data.mode)} • ${projectionLabel} • ${atomLabel} • ${orbitalModeLabel(selection.orbitalMode)} • ${orbitalLabel} • ${mode}`;
   }
 
   function buildChannelDescriptors(data, selection, theme) {
@@ -1568,6 +1691,20 @@
         return sum;
       }),
     );
+  }
+
+  function isSocSpinProjectionMode(data, selection) {
+    return (
+      selection.projectionMode === "spin" &&
+      data.mode === "soc" &&
+      (selection.socComponent === "mx" ||
+        selection.socComponent === "my" ||
+        selection.socComponent === "mz")
+    );
+  }
+
+  function spinProjectionColorbarTitle(component) {
+    return String(component || "m");
   }
 
   function colorForOrbital(label, index) {
@@ -1662,6 +1799,9 @@
       xValues,
       bandEntries,
       weightMatrix,
+      spinWeightMatrix,
+      spinProjection,
+      showSpinColorbar,
       segments,
       energyShift,
       selection,
@@ -1671,6 +1811,7 @@
     const y = [];
     const sizes = [];
     const weights = [];
+    const spinWeights = [];
     const bandIndices = [];
     const kIndices = [];
 
@@ -1701,6 +1842,13 @@
           if (!Number.isFinite(weight)) {
             continue;
           }
+          const spinWeight =
+            spinProjection && spinWeightMatrix[kIndex]
+              ? spinWeightMatrix[kIndex][bandIndex]
+              : null;
+          if (spinProjection && !Number.isFinite(spinWeight)) {
+            continue;
+          }
           const energy = bandEntry[bandIndex].energy - energyShift;
           if (energy < selection.energyMin || energy > selection.energyMax) {
             continue;
@@ -1715,7 +1863,10 @@
             x: xValues[kIndex],
             y: energy,
             weight,
-            size: Math.sqrt(absWeight) * selection.markerScale,
+            spinWeight,
+            size: spinProjection
+              ? Math.sqrt(Math.abs(spinWeight)) * selection.markerScale
+              : Math.sqrt(absWeight) * selection.markerScale,
             bandIndex: bandIndex + 1,
             kIndex:
               Array.isArray(originalKpointIndices) &&
@@ -1729,6 +1880,7 @@
           x.push(point.x);
           y.push(point.y);
           weights.push(point.weight);
+          spinWeights.push(point.spinWeight);
           sizes.push(point.size);
           bandIndices.push(point.bandIndex);
           kIndices.push(point.kIndex);
@@ -1754,15 +1906,44 @@
           color: "rgba(255,255,255,0.55)",
         },
       },
-      customdata: bandIndices.map((bandIndex, index) => [bandIndex, kIndices[index], weights[index]]),
-      hovertemplate:
-        "band %{customdata[0]}<br>" +
-        "k-point %{customdata[1]}<br>" +
-        "projection %{customdata[2]:.4f}<br>" +
-        "x %{x:.4f}<br>" +
-        "E %{y:.4f} eV<extra></extra>",
+      customdata: bandIndices.map((bandIndex, index) => [
+        bandIndex,
+        kIndices[index],
+        weights[index],
+        spinWeights[index],
+      ]),
+      hovertemplate: spinProjection
+        ? "band %{customdata[0]}<br>" +
+          "k-point %{customdata[1]}<br>" +
+          "total projection %{customdata[2]:.4f}<br>" +
+          `${selection.socComponent} %{customdata[3]:.4f}<br>` +
+          "x %{x:.4f}<br>" +
+          "E %{y:.4f} eV<extra></extra>"
+        : "band %{customdata[0]}<br>" +
+          "k-point %{customdata[1]}<br>" +
+          "projection %{customdata[2]:.4f}<br>" +
+          "x %{x:.4f}<br>" +
+          "E %{y:.4f} eV<extra></extra>",
     };
-    trace.marker.color = traceColor;
+    if (spinProjection) {
+      trace.marker.color = spinWeights;
+      trace.marker.cmin = -1;
+      trace.marker.cmax = 1;
+      trace.marker.colorscale = [
+        [0, "#2166ac"],
+        [0.5, "#f7f7f7"],
+        [1, "#b2182b"],
+      ];
+      trace.marker.colorbar = {
+        title: {
+          text: spinProjectionColorbarTitle(selection.socComponent),
+        },
+      };
+      trace.marker.showscale = Boolean(showSpinColorbar);
+      trace.showlegend = false;
+    } else {
+      trace.marker.color = traceColor;
+    }
 
     return trace;
   }
@@ -2037,6 +2218,23 @@
       if (Array.isArray(trace.marker.size)) {
         cloned.marker.size = [...trace.marker.size];
       }
+      if (Array.isArray(trace.marker.color)) {
+        cloned.marker.color = [...trace.marker.color];
+      }
+      if (Array.isArray(trace.marker.colorscale)) {
+        cloned.marker.colorscale = trace.marker.colorscale.map((entry) =>
+          Array.isArray(entry) ? [...entry] : entry,
+        );
+      }
+      if (trace.marker.colorbar) {
+        cloned.marker.colorbar = {
+          ...trace.marker.colorbar,
+          title:
+            trace.marker.colorbar.title && typeof trace.marker.colorbar.title === "object"
+              ? { ...trace.marker.colorbar.title }
+              : trace.marker.colorbar.title,
+        };
+      }
       if (trace.marker.line) {
         cloned.marker.line = { ...trace.marker.line };
       }
@@ -2120,6 +2318,9 @@
   }
 
   function buildPlotTitle(data, selection) {
+    if (selection.projectionMode === "spin") {
+      return "Spin-projected band structure";
+    }
     if (selection.plotMode === "multi") {
       return data.mode === "soc"
         ? "Projected band structure by orbital with SOC"
@@ -2165,14 +2366,14 @@
       margin: compact
         ? {
             l: 62,
-            r: 16,
+            r: isSocSpinProjectionMode(data, selection) ? 58 : 16,
             t: 22,
             b: 52,
             autoexpand: false,
           }
         : {
             l: 70,
-            r: 30,
+            r: isSocSpinProjectionMode(data, selection) ? 86 : 30,
             t: 72,
             b: 58,
             autoexpand: false,
@@ -2272,6 +2473,8 @@
   function buildPlotModel(data, selection, theme, energyMin, energyMax) {
     const energyShift = selection.alignToFermi ? data.fermiEnergy : 0;
     const descriptors = buildChannelDescriptors(data, selection, theme);
+    const useSpinProjection = isSocSpinProjectionMode(data, selection);
+    let spinColorbarShown = false;
     const lineTraces = [];
     const orbitalPlots = selection.orbitalSelections.map((orbital, orbitalOffset) => ({
       key: selectionColorKey(orbital),
@@ -2306,7 +2509,12 @@
         return;
       }
 
-      const projectionMatrix = channelProjectionMatrix(data, descriptor.key, selection.socComponent);
+      const projectionMatrix = useSpinProjection
+        ? data.projections.total || []
+        : channelProjectionMatrix(data, descriptor.key, selection.socComponent);
+      const spinProjectionMatrix = useSpinProjection
+        ? channelProjectionMatrix(data, descriptor.key, selection.socComponent)
+        : [];
       orbitalPlots.forEach((orbitalPlot) => {
         const atomIndices = Array.isArray(orbitalPlot.orbital.atomIndices)
           ? orbitalPlot.orbital.atomIndices
@@ -2316,6 +2524,12 @@
           atomIndices,
           orbitalPlot.orbital.indices,
         );
+        const spinWeights = useSpinProjection
+          ? aggregateWeights(spinProjectionMatrix, atomIndices, orbitalPlot.orbital.indices)
+          : [];
+        const showSpinColorbar =
+          useSpinProjection &&
+          (selection.plotMode === "multi" || !spinColorbarShown);
         const baseLabel =
           data.mode === "collinear_spin"
             ? `${descriptor.label} · ${orbitalPlot.label}`
@@ -2334,12 +2548,18 @@
           xValues: data.kpointDistances,
           bandEntries,
           weightMatrix: weights,
+          spinWeightMatrix: spinWeights,
+          spinProjection: useSpinProjection,
+          showSpinColorbar,
           segments: data.segments,
           energyShift,
           selection: { ...selection, energyMin, energyMax },
           originalKpointIndices: data.originalKpointIndices,
         });
         if (markerTrace) {
+          if (showSpinColorbar && selection.plotMode !== "multi") {
+            spinColorbarShown = true;
+          }
           orbitalPlot.markerTraces.push(markerTrace);
         }
       });
@@ -2560,6 +2780,18 @@
       return Promise.resolve();
     }
 
+    if (selection.projectionMode === "spin" && !isSocSpinProjectionMode(data, selection)) {
+      renderPlotEmptyState(
+        "Spin projection requires a SOC / non-collinear file with magnetization channels.",
+      );
+      return Promise.resolve();
+    }
+
+    if (selection.projectionMode === "spin" && !selection.orbitalSelections.length) {
+      renderPlotEmptyState("Spin projection requires projected orbital fields.");
+      return Promise.resolve();
+    }
+
     const model = buildPlotModel(plotData, selection, theme, energyMin, energyMax);
     if (selection.plotMode === "multi") {
       return renderMultiPlotGrid(plotData, selection, theme, energyMin, energyMax, model);
@@ -2763,6 +2995,18 @@
           return;
         }
         setPlotMode(nextMode);
+        renderPlot();
+      });
+    });
+
+    projectionModeButtons().forEach((button) => {
+      button.addEventListener("click", () => {
+        const nextMode = button.dataset.projectionMode;
+        if (!nextMode || nextMode === currentProjectionMode() || button.disabled) {
+          return;
+        }
+        setProjectionMode(nextMode);
+        syncProjectionModeAvailability(state.data);
         renderPlot();
       });
     });

@@ -26,6 +26,7 @@ https://github.com/user-attachments/assets/f7b203cf-b6aa-42a5-ac52-6ab53da07563
 
 - 支持非自旋、共线自旋极化、SOC / 非共线 `vasprun.xml`。
 - 支持按元素、原子编号范围、轨道分量、轨道族 (`s/p/d/f`) 过滤投影。
+- `Projection filters` 分为 `orbital` 与 `spin` 两个 tab；`spin` tab 可绘制 SOC / 非共线磁化分量投影。
 - 提供 `single` 与 `multi` 两种绘图模式，便于叠加查看或分面比较。
 - 自动识别 k-path 中的跳变并在图中分段显示。
 - 可选择是否对齐到费米能级，并可手动设置能量窗口。
@@ -38,6 +39,7 @@ https://github.com/user-attachments/assets/f7b203cf-b6aa-42a5-ac52-6ab53da07563
 
 - Supports non-spin, collinear spin-polarized, and SOC / non-collinear `vasprun.xml` files.
 - Filters projections by element, atom index range, orbital component, or orbital family (`s/p/d/f`).
+- Splits `Projection filters` into `orbital` and `spin` tabs; the `spin` tab plots SOC / non-collinear magnetization component projections.
 - Offers both `single` and `multi` plot modes for overlay or side-by-side comparison.
 - Detects k-path discontinuities and renders band segments accordingly.
 - Can align energies to the Fermi level or use absolute energies.
@@ -59,14 +61,14 @@ Access online: https://pband.cquctcmp.com/
 1. 选择一个 `vasprun.xml` 文件。
 2. 查看数据摘要，包括模式、k-point 数、band 数、原子数、轨道数和 `E_F`。
 3. 选择 `single` 或 `multi` 模式。
-4. 按元素、原子编号、轨道分量或轨道族筛选投影。
+4. 在 `Projection filters` 中选择 `orbital` 或 `spin` tab，并按元素、原子编号、轨道分量或轨道族筛选投影。
 5. 根据需要调整能量窗口、费米能级对齐、marker 样式和主题。
 6. 在 `single` 模式下导出 PNG，或导出设置 JSON 以便复用。
 
 1. Load a `vasprun.xml` file.
 2. Inspect the dataset summary, including mode, k-points, bands, atoms, orbitals, and `E_F`.
 3. Choose `single` or `multi` plot mode.
-4. Filter projections by element, atom indices, orbital components, or orbital families.
+4. Choose the `orbital` or `spin` tab in `Projection filters`, then filter projections by element, atom indices, orbital components, or orbital families.
 5. Adjust the energy window, Fermi alignment, marker styling, and theme as needed.
 6. Export PNG from `single` mode, or export a settings JSON for reuse.
 
@@ -86,13 +88,13 @@ Access online: https://pband.cquctcmp.com/
 
 - 非自旋计算。
 - 共线自旋极化计算，支持 `up/down` 同图显示或单独显示。
-- SOC / 非共线计算；如果 XML 中包含磁化投影通道，可切换 `mx/my/mz`。
+- SOC / 非共线计算；如果 XML 中包含磁化投影通道，可在 `spin` tab 中切换 `mx/my/mz`；自旋投影自动使用所有原子，并优先使用投影字段 `tot`，缺少 `tot` 时求和所有轨道字段，颜色直接显示所选磁化分量，marker 大小随其绝对值变化，能带线绘制在 marker 上方，色标固定为 `[-1, 1]`。
 - 含 projected 数据的常规 band structure 输出。
 - 大尺寸 `vasprun.xml` 文件，但解析速度和浏览器内存占用取决于文件大小。
 
 - Non-spin calculations.
 - Collinear spin-polarized calculations with combined or per-channel `up/down` display.
-- SOC / non-collinear calculations; if magnetization projection channels exist, `mx/my/mz` can be selected.
+- SOC / non-collinear calculations; if magnetization projection channels exist, `mx/my/mz` can be selected in the `spin` tab; spin projection automatically uses all atoms and prefers the projected `tot` field, falling back to the sum of all orbital fields when `tot` is absent, with color showing the selected magnetization component directly, marker size following its absolute value, band lines drawn above markers, and a fixed `[-1, 1]` color scale.
 - Standard band-structure outputs with projected data.
 - Large `vasprun.xml` files, subject to browser memory and parsing time.
 
